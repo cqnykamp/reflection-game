@@ -1,4 +1,4 @@
- /**
+/**
 
    Line Level - Great!!
    Dad Likes to plan out before moving
@@ -550,7 +550,6 @@ void loadLevel(int level_num) {
   TEMPmodel.yw = player_pos_original.y;
   
   playerShader->setMat4("model", TEMPmodel);
-
 
   bgShader->use();
   bgShader->setFloat("tileLength", TILE_LENGTH);
@@ -1291,14 +1290,6 @@ int main() {
     glfwPollEvents();
     
   }
-
-  /**
-  delete ourShader;
-  delete bgShader;
-  delete anchorShader;
-  delete frontGridShader;
-  delete mirrorShader;
-  **/
 
   glfwTerminate();
   return 0;

@@ -1,4 +1,6 @@
- 
+#if !defined(GAMEUTIL_CPP)
+
+
 #include <cmath>
 
 #include<vector>
@@ -8,6 +10,7 @@
 // VECTORS
 //
 //
+
 
 struct TEMPvec2 {
   float x = 0.0f;
@@ -24,7 +27,7 @@ struct TEMPivec2 {
   int y = 0;
 
   operator TEMPvec2() const { return TEMPvec2{(float)x, (float)y}; }
-  void operator *= ( float f) { x = x*f; y = y*f; }  
+  void operator *= ( int f) { x = x*f; y = y*f; }  
 };
 
 
@@ -45,7 +48,7 @@ float magnitude(TEMPvec2 v) {  return sqrt(v.x * v.x + v.y * v.y); }
 TEMPvec2 normalize(TEMPvec2 v) {  return TEMPvec2{v.x / magnitude(v), v.y / magnitude(v)}; }
 
 float dot(TEMPvec2 v1, TEMPvec2 v2) {   return v1.x * v2.x + v1.y * v2.y; }
-float dot(TEMPivec2 v1, TEMPivec2 v2) { return v1.x * v2.x + v1.y * v2.y; } 
+float dot(TEMPivec2 v1, TEMPivec2 v2) { return (float) (v1.x * v2.x + v1.y * v2.y); } 
 
 
 
@@ -305,3 +308,6 @@ TEMPivec3 operator*(TEMPimat3 m, TEMPivec3 v) {
 }
   **/
 
+
+#define GAMEUTIL_CPP
+#endif

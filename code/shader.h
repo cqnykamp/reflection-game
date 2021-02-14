@@ -87,6 +87,7 @@ public:
     //ensure ifstream objects can throw exceptions
     shaderFile.exceptions (std::ifstream::failbit | std::ifstream::badbit);
 
+    //TODO: remove exception here so that can disable exceptions in build file
     try {
       //open files
       shaderFile.open(filePath);
@@ -191,12 +192,7 @@ public:
     TEMPmat3 matData =  transpose(value);
     glUniformMatrix3fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &matData.xx);
   };
-
-  
   
 };
 
 #endif
-
-
-
