@@ -8,7 +8,7 @@ set Plibs=w:\reflect\build\lib
 
 
 :: -EHa-
-set CommonCompilerFlags=-MT -nologo -Gm- -GR- /EHsc -Od -Oi -Z7 -WX -W4 -wd4201 -wd4100 -wd4189 -wd4101 /I%Pincludes% -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1 -DHANDMADE_WIN32=1 -FC
+set CommonCompilerFlags=-MT -nologo -Gm- -GR- /EHsc -Od -Oi  -WX -W4 -wd4201 -wd4100 -wd4189 -wd4101 /I%Pincludes%  -FC -Zi /std:c++17
 
 set CommonLinkerFlags=/incremental:no /opt:ref /LIBPATH:%Plibs% SDL2.lib SDL2main.lib opengl32.lib 
 
