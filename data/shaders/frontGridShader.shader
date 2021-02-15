@@ -2,7 +2,7 @@
 
 layout (location = 0) in vec3 aPos;
 
-out vec2 uv;
+out vec2 uvRaw;
 //out vec3 pos;
 
 uniform mat4 view;
@@ -15,7 +15,7 @@ uniform mat4 model;
 
 
 void main() {
-  uv = vec2(aPos.x, aPos.y);
+  uvRaw = vec2(aPos.x, aPos.y);
   //pos = basis * vec3(aPos.x + xcoord, aPos.y + ycoord, 1.0f);
   //pos = model * vec4(aPos, 1.0f);
 
@@ -34,6 +34,7 @@ void main() {
   */
 
   gl_Position = view * model * vec4(aPos, 1.0f);
+  //  gl_Position = vec4(aPos, 1.f);
 }
 
 
@@ -44,7 +45,7 @@ void main() {
 
 out vec4 FragColor;
 
-in vec2 uv;
+in vec2 uvRaw;
 //in vec3 pos;
 
 
@@ -73,6 +74,8 @@ void main() {
   }
   **/
 
+  vec2 uv = fract(uvRaw);
+
   float borderwidth = 0.05;
   float not_border = (1.0-step(1.-borderwidth, uv.x))
     * (1.0-step(1.-borderwidth, uv.y))
@@ -83,9 +86,11 @@ void main() {
   float not_diag = step(diagwidth, abs(uv.x-uv.y))
     * step(diagwidth, abs(uv.x + uv.y - 1.));
 
+
   if(not_border ==1. && not_diag==1.) {
     discard;
   }
+
 
   /**
   //NOTE: not using fade right now bc it looks better without it
@@ -99,7 +104,7 @@ void main() {
 
 
   
-  FragColor = vec4(1., 1., 1., .1);
+  FragColor = vec4(1.f, 1.f, 1.f, 0.1f);
   //  FragColor = vec4(pos.x, pos.y, 0., 1.);
 
   /**

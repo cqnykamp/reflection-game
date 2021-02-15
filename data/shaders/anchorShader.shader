@@ -8,9 +8,9 @@ out vec2 uv;
 uniform mat4 model;
 uniform mat4 view;
 uniform int highlight_key;
-uniform float scale;
 
 void main() {
+  
   uv = vec2(aPos.x, aPos.y);
 
   vec3 pos;
@@ -36,7 +36,6 @@ void main() {
 out vec4 FragColor;
 
 in vec2 uv;
-
 uniform int highlight_key;
 
 void main() {

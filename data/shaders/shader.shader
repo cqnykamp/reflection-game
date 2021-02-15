@@ -24,12 +24,11 @@ out vec4 FragColor;
 
 in vec2 uv;
 
-//uniform bool is_goal;
+uniform int highlight_key;
 
 int squares_per_size = 4;
 
 void main() {
-  bool is_goal = false;
   
   vec4 uvColor = vec4(uv, 0.0f, 1.0f);
 
@@ -47,7 +46,8 @@ void main() {
     * step(diagwidth, abs(uv.x + uv.y - 1.));
 
   
- if(is_goal) {
+  if(highlight_key == 1) { // is goal
+   
     //    FragColor = vec4(0.961,0.745,0.255, 1.0f); //gold
     FragColor = vec4(0.145 *1.5 ,0.502 * 1.5 ,0.224 * 1.5, 1.0); //green
     

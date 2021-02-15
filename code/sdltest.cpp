@@ -1,3 +1,4 @@
+//TODO: find memory leak
 
 #include "SDL/SDL.h"
 //#include <SDL/SDL_opengl.h>
@@ -25,7 +26,6 @@ typedef double real64;
 
 #define PI 3.1415926535897932384626433f
 
-
 #include "reflect.h"
 
 #include "reflect_temp.cpp"
@@ -40,27 +40,17 @@ typedef double real64;
 
 #define global static
 
-
-const int amplitude = 28000;
+const int amplitude = 0;//10000;
 const int sampleRate = 48000;
 
 int screenWidth = 1280;
 int screenHeight = 720;
 
-
-void audioCallback(void*  userdata, uint8* rawStream, int lengthInBytes) {
-  int16 *stream = (int16 *) rawStream;
-  int streamLengthInSamples = lengthInBytes  / 2; //2 bytes per sample
-
-  int &samplePos (*(int *) userdata);
-
-  for(int i=0; i < streamLengthInSamples; ++i) {
-    double time = ((double) samplePos) / ((double) sampleRate); // in seconds
-    *(stream + i) = (int16) (amplitude * sin(2.0f * PI * 260.0f * time));
-
-    samplePos++;			     
-  }
-}
+unsigned int vao[10];
+unsigned int vbo[10];
+unsigned int ebo[10];
+unsigned int shader[10];
+unsigned int indicesCount[10];
 
 
 unsigned int loadShaderFromFile(const char *filePath) {    
@@ -112,6 +102,7 @@ unsigned int loadShaderFromFile(const char *filePath) {
       std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
     };
 
+
     //shader program
     unsigned int ID = glCreateProgram();
     glAttachShader(ID, vertex);
@@ -131,20 +122,25 @@ unsigned int loadShaderFromFile(const char *filePath) {
     return ID;
 }
 
-renderObject objects[500];
-int activeObjects = 0;
 
-int createNewRenderObject(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath) {
+struct NewRenderObject {
+  unsigned int vao;
+  unsigned int vbo;
+  unsigned int ebo;
+  unsigned int shader;
+  unsigned int indicesCount;
+};
+NewRenderObject createNewRenderObject(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath) {
 
-  renderObject obj = {};
+  NewRenderObject obj = {};
 
-  glGenVertexArrays(1, &(obj.vaoID));
-  glGenBuffers(1, &(obj.vboID));
-  glGenBuffers(1, &(obj.eboID));
+  glGenVertexArrays(1, &(obj.vao));
+  glGenBuffers(1, &(obj.vbo));
+  glGenBuffers(1, &(obj.ebo));
 
-  glBindVertexArray(obj.vaoID);
-  glBindBuffer(GL_ARRAY_BUFFER, obj.vboID);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.eboID);
+  glBindVertexArray(obj.vao);
+  glBindBuffer(GL_ARRAY_BUFFER, obj.vbo);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.ebo);
 
   glBufferData(GL_ARRAY_BUFFER, sizeof(float) * verticesLength, vertices, GL_STATIC_DRAW);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indicesLength, indices, GL_STATIC_DRAW);
@@ -152,43 +148,19 @@ int createNewRenderObject(float vertices[], int verticesLength, unsigned int ind
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float),(void*) 0);
   glEnableVertexAttribArray(0);
 
-  obj.shaderID = loadShaderFromFile(filePath);
+  obj.shader = loadShaderFromFile(filePath);
   obj.indicesCount = indicesLength;
 
-  obj.gameObj = {};
-  
-  objects[activeObjects] = obj;
-  activeObjects++;
-  return (activeObjects-1);
+  return obj;
 }
 
 
-gameObject* getObject(int id) {
-  return &(objects[id].gameObj);
+void updateRenderContextVertices(RenderContext context, float *vertices, int verticesLength) {
+  //TODO: don't use GL_STATIC_DRAW
+  glBindVertexArray(vao[context]);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo[context]);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * verticesLength, vertices);
 }
-
-
-/*
-int getAllObjects(gameObject *allObjects) {
-  for(int i=0; i<activeObjects; i++) {
-    *(allObjects + i)  = objects[i].gameObj;
-  }
-
-  return activeObjects;
-}
-*/
-
-int getObjectCount() {
-  return activeObjects;
-}
-
-
-void clearAllObjects() {
-  SDL_memset(&objects, 0, sizeof(renderObject) * 500);
-  activeObjects = 0;
-}
-
-
 
 
 
@@ -214,6 +186,10 @@ int wmain(int argc, char* args[])
 	//TODO: account for possible failure
 	gladLoadGL((GLADloadfunc) SDL_GL_GetProcAddress);
 
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+
 	SDL_AudioSpec want;
 	SDL_AudioSpec have;
 	SDL_AudioDeviceID device;
@@ -225,9 +201,7 @@ int wmain(int argc, char* args[])
 	want.format = AUDIO_S16SYS;
 	want.channels = 1;
 	want.samples = 4096;
-	//want.callback = audioCallback;
 	want.callback = NULL;
-	//want.userdata = &samplePos;
 
 	//TODO: account for available sound card format
 	device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0); //SDL_AUDIO_ALLOW_FORMAT_CHANGE	
@@ -237,11 +211,118 @@ int wmain(int argc, char* args[])
 	//Synchronize buffer swap with monitor's vertical refresh
 	SDL_GL_SetSwapInterval(1);
 
-	//TODO: look into different allocator than malloc
-	void *renderStateRaw = malloc(sizeof(renderObject)* 100);
-	renderObject *renderState = (renderObject *) renderStateRaw;
-	SDL_memset(renderState, 0, sizeof(renderObject) * 100);
+	float background_vertices[] = {
+	  -50.0f, -50.0f, 0.0f, 
+	  -50.0f, 50.0f, 0.0f,  
+	  50.0f, 50.0f, 0.0f,   
+	  50.0f, -50.0f, 0.0f,  
+	};
+	unsigned int background_indices[] = {
+	  0, 1, 2,
+	  2, 3, 0
+	};
+	NewRenderObject bgObj = createNewRenderObject(background_vertices, 12, background_indices, 6, "shaders/background.shader");
+	vao[BACKGROUND] = bgObj.vao;
+	vbo[BACKGROUND] = bgObj.vbo;
+	ebo[BACKGROUND] = bgObj.ebo;
+	shader[BACKGROUND] = bgObj.shader;
+	indicesCount[BACKGROUND] = bgObj.indicesCount;
+	
+	float floor_vertices[] = {
+	  0.0f, 0.0f, 0.0f,
+	  1.0f, 0.0f, 0.0f,
+	  1.0f, 1.0f, 0.0f,
+	  0.0f, 1.0f, 0.0f
+	};  
+	unsigned int floor_indices[] = {
+	  0, 1, 2,
+	  2, 3, 0
+	};
 
+	NewRenderObject floorObj = createNewRenderObject(floor_vertices, 12, floor_indices, 6, "shaders/shader.shader");
+	vao[FLOOR_TILE] = floorObj.vao;
+	vbo[FLOOR_TILE] = floorObj.vbo;
+	ebo[FLOOR_TILE] = floorObj.ebo;
+	shader[FLOOR_TILE] = floorObj.shader;
+	indicesCount[FLOOR_TILE] = floorObj.indicesCount;
+
+	float player_vertices[] = {
+	  0.15f, 0.15f, 0.0f,
+	  0.85f, 0.15f, 0.0f,
+	  0.85f, 0.85f, 0.0f,
+	  0.15f, 0.85f, 0.0f,
+	};
+	unsigned int player_indices[] = {
+	  0, 1, 2,
+	  2, 3, 0
+	};
+	NewRenderObject playerObj = createNewRenderObject(player_vertices, 12, player_indices, 6, "shaders/player.shader");
+	vao[PLAYER] = playerObj.vao;
+	vbo[PLAYER] = playerObj.vbo;
+	ebo[PLAYER] = playerObj.ebo;
+	shader[PLAYER] = playerObj.shader;
+	indicesCount[PLAYER] = playerObj.indicesCount;
+
+	float anchor_vertices[] = {
+	  -1.0f, -1.0f, 0.0f,
+	  -1.0f, 1.0f, 0.0f,
+	  1.0f, 1.0f, 0.0f,
+	  1.0f, -1.0f, 0.0f,
+	};
+	unsigned int anchor_indices[] = {
+	  0, 1, 2,
+	  2, 3, 0
+	};
+	NewRenderObject anchorObj = createNewRenderObject(anchor_vertices, 12, anchor_indices, 6, "shaders/anchorShader.shader");
+	vao[ANCHOR] = anchorObj.vao;
+	vbo[ANCHOR] = anchorObj.vbo;
+	ebo[ANCHOR] = anchorObj.ebo;
+	shader[ANCHOR] = anchorObj.shader;
+	indicesCount[ANCHOR] = anchorObj.indicesCount;	
+
+	
+	float mirror_vertices[] = {
+	  0.0f, 0.0f, 0.0f,
+	  0.0f, 1.0f, 0.0f,
+	  1.0f, 1.0f, 0.0f,
+	  1.0f, 0.0f, 0.0f,
+	};
+	unsigned int mirror_indices[] = {
+	  0, 1, 2,
+	  2, 3, 0
+	};
+	NewRenderObject mirrorObj = createNewRenderObject(mirror_vertices, 12, mirror_indices, 6, "shaders/mirrorShader.shader");
+	vao[MIRROR] = mirrorObj.vao;
+	vbo[MIRROR] = mirrorObj.vbo;
+	ebo[MIRROR] = mirrorObj.ebo;
+	shader[MIRROR] = mirrorObj.shader;
+	indicesCount[MIRROR] = mirrorObj.indicesCount;
+
+	float front_grid_vertices[] = {
+	  -50.f, -50.f, 0.0f,
+	  -50.f, 50.0f, 0.0f,
+	  50.0f, 50.0f, 0.0f,
+	  50.0f, -50.0f, 0.0f
+	};
+	unsigned int front_grid_indices[] = {
+	  0, 1, 2,
+	  2, 3, 0
+	};
+	NewRenderObject frontGridObj = createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6, "shaders/frontGridShader.shader");
+	vao[FRONT_GRID] = frontGridObj.vao;
+	vbo[FRONT_GRID] = frontGridObj.vbo;
+	ebo[FRONT_GRID] = frontGridObj.ebo;
+	shader[FRONT_GRID] = frontGridObj.shader;
+	indicesCount[FRONT_GRID] = frontGridObj.indicesCount;
+
+
+       
+	//TODO: look into different allocator than malloc
+	int maxRenderObjects = 1000;
+	void *renderMemoryRaw = malloc(sizeof(renderObject) * maxRenderObjects);
+	renderObject *renderObjects = (renderObject *) renderMemoryRaw;
+	SDL_memset(renderObjects, 0, sizeof(renderObject) * maxRenderObjects);	
+	RenderMemoryInfo renderMemoryInfo = {maxRenderObjects, renderObjects};
 
 
 	gameMemory memory;
@@ -250,26 +331,17 @@ int wmain(int argc, char* args[])
 	memory.temporaryStorage = (void *)((char *) memory.permanentStorage + 5*1024);
 	SDL_memset(memory.permanentStorage, 0, 10 * 1024);
 
-
-	/*
-	uint64 timerFrequency = SDL_GetPerformanceFrequency();
-	uint64 timerCount = SDL_GetPerformanceCounter();
-	*/
-
-	uint32 prevTime = SDL_GetTicks();
 	
-
-	/*
-	int availableShaders[4];
-	availableShaders[0] = loadShaderFromFile("shaders/testShader.shader");
-	*/
-
-
+	uint64 timerFrequency = SDL_GetPerformanceFrequency();
+	uint64 prevTime = SDL_GetPerformanceCounter();
+	
 	int samplesAheadTarget = (int) (sampleRate * 0.1f); // 1/10 of a sec ahead
 	int samplePos = 0;
 	
 	bool running = true;
 	while(running) {
+
+	  SDL_memset(renderMemoryInfo.memory, 0, sizeof(renderObject) * renderMemoryInfo.count);
 
 	  controllerInput mainController = {};
 	  //mainController = {};
@@ -346,27 +418,26 @@ int wmain(int argc, char* args[])
 	  input.screenHeight = screenHeight;
 	  input.controllers[0] = mainController;
 
-
-	  uint32 currentTime = SDL_GetTicks();
-	  //uint32 deltaTime = currentTime - prevTime;
-	  prevTime = currentTime;
-
-	  std::cout << "Duraton: "<<deltaTime<< " ms\n";
-	  
+	  uint64 timerCount = SDL_GetPerformanceCounter();
+	  uint64 deltaCount = timerCount - prevTime;	  
+	  uint32 deltaTime = (uint32) (1000.f * (float)deltaCount / (float)timerFrequency);
+	  uint32 currentTime = (uint32) (1000.f * (float) timerCount / (float)timerFrequency); 
 	  input.currentTime = currentTime;
+	  input.deltaTime = deltaTime;
+	  prevTime = timerCount;
+	  //std::cout << "Duraton: "<<deltaTime<< " ms\n";
+
 	  
-	  gameUpdateAndRender(input, &memory);
+	  gameUpdateAndRender(input, &memory, &renderMemoryInfo);
 
 	  
 	  int16 *stream = new int16[samplesToAppend];
-
 	  for(int i=0; i < samplesToAppend; ++i) {
 	    double time = ((double) samplePos) / ((double) sampleRate); // in seconds
 	    *(stream + i) = (int16) (amplitude * sin(2.0f * PI * 260.0f * time));
-
+	    
 	    samplePos++;			     
 	  }
-
 	  SDL_QueueAudio(device, (void *)stream, samplesToAppend * 2);
 
 	  
@@ -374,28 +445,30 @@ int wmain(int argc, char* args[])
 	  glClearColor(1.f, 0.f, 1.f, 1.f);
 	  glClear(GL_COLOR_BUFFER_BIT);
 
-	  /*
-	  renderObject *objects = (renderObject *) renderState;
-	  renderObject obj = *objects;
-	  */
 
-	  //myShader.use();
-
-	  for(int i=0; i<activeObjects; i++) {
-	    renderObject obj = objects[i];
+	  for(int i=0; i<renderMemoryInfo.count; i++) {
 	    
-	    glUseProgram(obj.shaderID);
-	    
-	    TEMPmat4 modelMatData = transpose(obj.gameObj.model);
-	    glUniformMatrix4fv(glGetUniformLocation(obj.shaderID, "model"), 1, GL_FALSE, &modelMatData.xx);
+	    renderObject obj = *(renderMemoryInfo.memory + i);
 
-	    TEMPmat4 viewMatData = transpose(obj.gameObj.view);
-	    glUniformMatrix4fv(glGetUniformLocation(obj.shaderID, "view"), 1, GL_FALSE, &viewMatData.xx);
-	  
-	    glBindVertexArray(obj.vaoID);
-	    glBindBuffer(GL_ARRAY_BUFFER, obj.vboID);
-	    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.eboID);
-	    glDrawElements(GL_TRIANGLES, obj.indicesCount, GL_UNSIGNED_INT, 0);
+	    if(obj.renderContext) { //aka if game has put something here
+	    
+	      glBindVertexArray(vao[obj.renderContext]);
+	      glBindBuffer(GL_ARRAY_BUFFER, vbo[obj.renderContext]);
+	      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[obj.renderContext]);
+	      glUseProgram(shader[obj.renderContext]);
+
+	      mat4 modelMatData = transpose(obj.model);
+	      glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "model"), 1, GL_FALSE, &modelMatData.xx);
+	      mat4 viewMatData = transpose(obj.view);
+	      glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "view"), 1, GL_FALSE, &viewMatData.xx);
+	      mat3 basisMatData = transpose(obj.basis);
+	      glUniformMatrix3fv(glGetUniformLocation(shader[obj.renderContext], "basis"), 1, GL_FALSE, &basisMatData.xx);
+
+	      glUniform1i(glGetUniformLocation(shader[obj.renderContext], "highlight_key"), obj.highlight_key);
+	    
+	      glDrawElements(GL_TRIANGLES, indicesCount[obj.renderContext], GL_UNSIGNED_INT, 0);
+
+	    }
 	    
 	  }
 

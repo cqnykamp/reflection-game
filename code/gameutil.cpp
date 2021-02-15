@@ -12,53 +12,53 @@
 //
 
 
-struct TEMPvec2 {
+struct vec2 {
   float x = 0.0f;
   float y = 0.0f;
 
-  TEMPvec2() {}
-  TEMPvec2(float _f)           { x = _f; y = _f; }
-  TEMPvec2(float _x, float _y) { x = _x; y = _y; }
+  vec2() {}
+  vec2(float _f)           { x = _f; y = _f; }
+  vec2(float _x, float _y) { x = _x; y = _y; }
   void operator *= ( float f) {x = x*f; y = y*f; }
 };
 
-struct TEMPivec2 {
+struct ivec2 {
   int x = 0;
   int y = 0;
 
-  operator TEMPvec2() const { return TEMPvec2{(float)x, (float)y}; }
+  operator vec2() const { return vec2{(float)x, (float)y}; }
   void operator *= ( int f) { x = x*f; y = y*f; }  
 };
 
 
-bool operator==(TEMPvec2 v1, TEMPvec2 v2) {    return (v1.x == v2.x && v1.y == v2.y); }
-TEMPvec2 operator+(TEMPvec2 v1, TEMPvec2 v2) { return TEMPvec2{v1.x + v2.x, v1.y+v2.y}; }
-TEMPvec2 operator-(TEMPvec2 v1, TEMPvec2 v2) { return TEMPvec2{v1.x - v2.x, v1.y - v2.y}; }
-TEMPvec2 operator*(float f, TEMPvec2 v) {      return TEMPvec2{f * v.x, f * v.y}; }
-TEMPvec2 operator*(TEMPvec2 v, float f) {      return f * v; }
+bool operator==(vec2 v1, vec2 v2) {    return (v1.x == v2.x && v1.y == v2.y); }
+vec2 operator+(vec2 v1, vec2 v2) { return vec2{v1.x + v2.x, v1.y+v2.y}; }
+vec2 operator-(vec2 v1, vec2 v2) { return vec2{v1.x - v2.x, v1.y - v2.y}; }
+vec2 operator*(float f, vec2 v) {      return vec2{f * v.x, f * v.y}; }
+vec2 operator*(vec2 v, float f) {      return f * v; }
 
 // Special ivec2 variations to keep result in ivec2
-TEMPivec2 operator+(TEMPivec2 v1, TEMPivec2 v2) { return TEMPivec2{v1.x+v2.x, v1.y+v2.y}; }
-TEMPivec2 operator-(TEMPivec2 v1, TEMPivec2 v2) { return TEMPivec2{v1.x-v2.x, v1.y-v2.y}; }
-TEMPivec2 operator*(int i, TEMPivec2 v) {         return TEMPivec2{i * v.x, i * v.y}; }
-TEMPivec2 operator*(TEMPivec2 v, int i) {         return i * v; }
+ivec2 operator+(ivec2 v1, ivec2 v2) { return ivec2{v1.x+v2.x, v1.y+v2.y}; }
+ivec2 operator-(ivec2 v1, ivec2 v2) { return ivec2{v1.x-v2.x, v1.y-v2.y}; }
+ivec2 operator*(int i, ivec2 v) {         return ivec2{i * v.x, i * v.y}; }
+ivec2 operator*(ivec2 v, int i) {         return i * v; }
 
 
-float magnitude(TEMPvec2 v) {  return sqrt(v.x * v.x + v.y * v.y); }
-TEMPvec2 normalize(TEMPvec2 v) {  return TEMPvec2{v.x / magnitude(v), v.y / magnitude(v)}; }
+float magnitude(vec2 v) {  return sqrt(v.x * v.x + v.y * v.y); }
+vec2 normalize(vec2 v) {  return vec2{v.x / magnitude(v), v.y / magnitude(v)}; }
 
-float dot(TEMPvec2 v1, TEMPvec2 v2) {   return v1.x * v2.x + v1.y * v2.y; }
-float dot(TEMPivec2 v1, TEMPivec2 v2) { return (float) (v1.x * v2.x + v1.y * v2.y); } 
+float dot(vec2 v1, vec2 v2) {   return v1.x * v2.x + v1.y * v2.y; }
+float dot(ivec2 v1, ivec2 v2) { return (float) (v1.x * v2.x + v1.y * v2.y); } 
 
 
 
-struct TEMPvec3 {
+struct vec3 {
   float x=0;
   float y=0;
   float z=0;
 };
 
-struct TEMPivec3 {
+struct ivec3 {
   int x=0;
   int y=0;
   int z=0;
@@ -66,7 +66,7 @@ struct TEMPivec3 {
 
 
 
-struct TEMPvec4 {
+struct vec4 {
   float x=0;
   float y=0;
   float z=0;
@@ -82,19 +82,19 @@ struct TEMPvec4 {
 //
 //
 
-struct TEMPmat3 {
+struct mat3 {
   float xx=1.0f; float xy=0.0f; float xz=0.0f;
   float yx=0.0f; float yy=1.0f; float yz=0.0f;
   float zx=0.0f; float zy=0.0f; float zz=1.0f;
 };
 
-struct TEMPimat3 {
+struct imat3 {
   int xx=1; int xy=0; int xz=0;
   int yx=0; int yy=1; int yz=0;
   int zx=0; int zy=0; int zz=1;
 
-  operator TEMPmat3() const {
-    return TEMPmat3{
+  operator mat3() const {
+    return mat3{
       (float)xx, (float)xy, (float) xz,
       (float)yx, (float)yy, (float) yz,
       (float)zx, (float)zy, (float) zz
@@ -102,27 +102,36 @@ struct TEMPimat3 {
   }
 };
 
-TEMPmat3 operator*(float f, TEMPmat3 m) {
-  return TEMPmat3 {
+mat3 operator*(float f, mat3 m) {
+  return mat3 {
     f*m.xx, f*m.xy, f*m.xz,
     f*m.yx, f*m.yy, f*m.yz,
     f*m.zx, f*m.zy, f*m.zz
   };
 }
-TEMPmat3 operator*(TEMPmat3 m, float f) {
+mat3 operator*(mat3 m, float f) {
   return f * m;
 }
 
-TEMPivec3 operator*(TEMPimat3 m, TEMPivec3 v) {
-  return TEMPivec3{
+ivec3 operator*(imat3 m, ivec3 v) {
+  return ivec3{
     m.xx*v.x + m.xy*v.y + m.xz*v.z,
     m.yx*v.x + m.yy*v.y + m.yz*v.z,
     m.zx*v.x + m.zy*v.y + m.zz*v.z
   };
 }
 
-TEMPmat3 operator*(TEMPmat3 a, TEMPmat3 b) {
-  return TEMPmat3 {
+vec3 operator*(mat3 m, vec3 v) {
+  return vec3{
+    m.xx*v.x + m.xy*v.y + m.xz*v.z,
+    m.yx*v.x + m.yy*v.y + m.yz*v.z,
+    m.zx*v.x + m.zy*v.y + m.zz*v.z
+  };
+}
+
+
+mat3 operator*(mat3 a, mat3 b) {
+  return mat3 {
     (a.xx*b.xx + a.xy*b.yx + a.xz*b.zx),
     (a.xx*b.xy + a.xy*b.yy + a.xz*b.zy),
     (a.xx*b.xz + a.xy*b.yz + a.xz*b.zz),
@@ -136,8 +145,8 @@ TEMPmat3 operator*(TEMPmat3 a, TEMPmat3 b) {
     (a.zx*b.xz + a.zy*b.yz + a.zz*b.zz)
   };
 }
-TEMPimat3 operator*(TEMPimat3 a, TEMPimat3 b) {
-  return TEMPimat3 {
+imat3 operator*(imat3 a, imat3 b) {
+  return imat3 {
     (a.xx*b.xx + a.xy*b.yx + a.xz*b.zx),
     (a.xx*b.xy + a.xy*b.yy + a.xz*b.zy),
     (a.xx*b.xz + a.xy*b.yz + a.xz*b.zz),
@@ -153,8 +162,8 @@ TEMPimat3 operator*(TEMPimat3 a, TEMPimat3 b) {
 }
 
 
-TEMPmat3 operator+(TEMPmat3 a, TEMPmat3 b) {
-  return TEMPmat3 {
+mat3 operator+(mat3 a, mat3 b) {
+  return mat3 {
     a.xx+b.xx, a.xy+b.xy, a.xz+b.xz,
     a.yx+b.yx, a.yy+b.yy, a.yz+b.yz,
     a.zx+b.zx, a.zy+b.zy, a.zz+b.zz,
@@ -162,15 +171,15 @@ TEMPmat3 operator+(TEMPmat3 a, TEMPmat3 b) {
 }
 
 
-TEMPmat3 transpose(TEMPmat3 m) {
-  return TEMPmat3 {
+mat3 transpose(mat3 m) {
+  return mat3 {
     m.xx, m.yx, m.zx,
     m.xy, m.yy, m.zy,
     m.xz, m.yz, m.zz
   };
 }
-TEMPimat3 transpose(TEMPimat3 m) {
-  return TEMPimat3 {
+imat3 transpose(imat3 m) {
+  return imat3 {
     m.xx, m.yx, m.zx,
     m.xy, m.yy, m.zy,
     m.xz, m.yz, m.zz
@@ -187,7 +196,9 @@ TEMPimat3 transpose(TEMPimat3 m) {
 
 
 
-struct TEMPmat4 {
+
+
+struct mat4 {
   float xx; float xy; float xz; float xw;
   float yx; float yy; float yz; float yw;
   float zx; float zy; float zz; float zw;
@@ -195,7 +206,7 @@ struct TEMPmat4 {
 };
 
 
-const TEMPmat4 identity4 = TEMPmat4 {
+const mat4 identity4 = mat4 {
   1.0f, 0.0f, 0.0f, 0.0f,
   0.0f, 1.0f, 0.0f, 0.0f,
   0.0f, 0.0f, 1.0f, 0.0f,
@@ -204,16 +215,16 @@ const TEMPmat4 identity4 = TEMPmat4 {
 
 
 /**
-TEMPmat3 TEMPmat3WithDiag(float f) {
-  TEMPmat3 m = {};
+mat3 mat3WithDiag(float f) {
+  mat3 m = {};
   m.xx = f;
   m.yy = f;
   m.zz = f;
   return m;
 }
 
-TEMPimat3 TEMPimat3WithDiag(int n) {
-  TEMPimat3 m = {};
+imat3 imat3WithDiag(int n) {
+  imat3 m = {};
   m.xx = n;
   m.yy = n;
   m.zz = n;
@@ -223,8 +234,8 @@ TEMPimat3 TEMPimat3WithDiag(int n) {
 
 
 
-TEMPmat4 transpose(TEMPmat4 m) {
-  return TEMPmat4 {
+mat4 transpose(mat4 m) {
+  return mat4 {
     m.xx, m.yx, m.zx, m.wx,
     m.xy, m.yy, m.zy, m.wy,
     m.xz, m.yz, m.zz, m.wz,
@@ -234,8 +245,8 @@ TEMPmat4 transpose(TEMPmat4 m) {
 
 
 
-TEMPvec4 operator*(TEMPmat4 m, TEMPvec4 v) {
-  return TEMPvec4 {
+vec4 operator*(mat4 m, vec4 v) {
+  return vec4 {
     m.xx*v.x + m.xy*v.y + m.xz*v.z + m.xw*v.w,
     m.yx*v.x + m.yy*v.y + m.yz*v.z + m.yw*v.w,
     m.zx*v.x + m.zy*v.y + m.zz*v.z + m.zw*v.w,
@@ -246,8 +257,8 @@ TEMPvec4 operator*(TEMPmat4 m, TEMPvec4 v) {
 
 
 
-TEMPmat4 operator*(TEMPmat4 a, TEMPmat4 b) {
-  return TEMPmat4 {
+mat4 operator*(mat4 a, mat4 b) {
+  return mat4 {
     (a.xx*b.xx + a.xy*b.yx + a.xz*b.zx + a.xw*b.wx),
     (a.xx*b.xy + a.xy*b.yy + a.xz*b.zy + a.xw*b.wy),
     (a.xx*b.xz + a.xy*b.yz + a.xz*b.zz + a.xw*b.wz),
@@ -299,12 +310,12 @@ void matrixVectorMultiplyFloat(float m[], float v[], float result[], int vecSize
   }    
 }
 
-TEMPivec3 operator*(TEMPimat3 m, TEMPivec3 v) {
+ivec3 operator*(imat3 m, ivec3 v) {
   int m_array[] = {m.xx, m.xy, m.xz, m.yx, m.yy, m.yz, m.zx, m.zy, m.zz};
   int v_array[] = {v.x, v.y, v.z};
   int r_array[3];
   matrixVectorMultiplyInt(m_array, v_array, r_array, 3);
-  return TEMPivec3{r_array[0], r_array[1], r_array[2]};
+  return ivec3{r_array[0], r_array[1], r_array[2]};
 }
   **/
 

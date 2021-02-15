@@ -8,9 +8,6 @@
 #include <fstream>
 #include <string>
 
-int myObjectID;
-int obj2;
-
 
 const float MOUSE_HOVER_SNAP_DIST = 1.0f;
 const float MOUSE_DRAG_SNAP_DIST = 0.4f;
@@ -21,8 +18,8 @@ const float MOUSE_UNSNAP_DIST = 0.6f;
 //
 bool game_ended;
 int active_level = 0;
-TEMPimat3 basis;
-TEMPimat3 target_basis;
+imat3 basis;
+imat3 target_basis;
 
 
 //
@@ -36,14 +33,13 @@ int board[board_height][board_width];
 int level_height;
 int level_width;
 
-TEMPivec2 player_pos_original;
+ivec2 player_pos_original;
 
 struct Tile {
   int xid;
   int yid;
   int type;
 };
-
 //TODO: use simple array
 std::vector<Tile> tiles(25);
 std::vector<int> tileIds;
@@ -67,7 +63,7 @@ enum Angle {
 };
 Angle mirrorFragmentAngle;
 float mirrorFragmentMag;
-TEMPivec2 mirrorFragmentAnchor;
+ivec2 mirrorFragmentAnchor;
 
 
 //
@@ -76,37 +72,26 @@ TEMPivec2 mirrorFragmentAnchor;
 bool is_animation_active = false;
 float weight;
 
-const float SLEEP_DURATION = 0.6f; // seconds
+const uint32 SLEEP_DURATION = 600; // milliseconds
 bool sleep_active = false;
-float sleepStartTime;
+uint32 sleepStartTime;
 
-
-int highlights[board_height][board_width];
 
 //
 // Window Info
 //
 float TILE_LENGTH = 0.2f;
-TEMPvec3 shift_to_center = {-2.25f, -2.25f, 0.0f};
+vec3 shift_to_center = {-2.25f, -2.25f, 0.0f};
 
-TEMPmat4 view_inverse;
-
-
-float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 
 
 
-
-int playerObjectID;
-int bgObjectID;
-int frontGridObjectID;
-
 //
 // Game-specific helper functions
 // 
-bool isPointInBounds(TEMPvec2 coords) {
+bool isPointInBounds(vec2 coords) {
   if(coords.x >= 0 && coords.x < board_width && coords.y >= 0 && coords.y < board_height) {
     return true;
   } else {
@@ -114,7 +99,7 @@ bool isPointInBounds(TEMPvec2 coords) {
   }
 }
 
-bool classifyVector(Angle *angle, TEMPvec2 vec) {
+bool classifyVector(Angle *angle, vec2 vec) {
   if(vec.x == 0) {
     *angle = UP;
   } else if(vec.y == 0) {
@@ -130,7 +115,7 @@ bool classifyVector(Angle *angle, TEMPvec2 vec) {
   return true;
 }
 
-TEMPvec2 toVec(Angle angle) {
+vec2 toVec(Angle angle) {
   switch(angle) {
   case RIGHT:
     return {1.0f, 0.0f};
@@ -146,15 +131,15 @@ TEMPvec2 toVec(Angle angle) {
   }
 }
 
-TEMPivec2 nearestAnchor(TEMPvec2 point) {
-  TEMPivec2 nearest_anchor = {};
+ivec2 nearestAnchor(vec2 point) {
+  ivec2 nearest_anchor = {};
   float dist = 10000;
   for(int yid=0; yid<(level_height+1); yid++) {
     for(int xid=0; xid<(level_width+1); xid++) {
       if(board[yid][xid] == 1) {	
-	float current_dist = magnitude(point - TEMPivec2{xid,yid});
+	float current_dist = magnitude(point - ivec2{xid,yid});
 	if(current_dist < dist) {
-	  nearest_anchor = TEMPivec2{xid,yid};
+	  nearest_anchor = ivec2{xid,yid};
 	  dist = current_dist;
 	}
       }
@@ -164,11 +149,11 @@ TEMPivec2 nearestAnchor(TEMPvec2 point) {
   return nearest_anchor;
 }
 
-bool isNearbyAnchor(TEMPvec2 coord, float maxAcceptableDistance) {
+bool isNearbyAnchor(vec2 coord, float maxAcceptableDistance) {
   for(int yid=0; yid < (level_height+1); yid++) {
     for(int xid=0; xid < (level_width+1); xid++) {
       if(board[yid][xid] == 1
-	 && magnitude(coord - TEMPivec2{xid,yid}) <= maxAcceptableDistance) {
+	 && magnitude(coord - ivec2{xid,yid}) <= maxAcceptableDistance) {
 	return true;
       }
     }
@@ -176,9 +161,9 @@ bool isNearbyAnchor(TEMPvec2 coord, float maxAcceptableDistance) {
   return false;
 }
 
-void reflect_along(TEMPivec2 anchor, Angle angle) {
+void reflect_along(ivec2 anchor, Angle angle) {
 
-  TEMPimat3 reflectMatrix;
+  imat3 reflectMatrix;
 
   switch(angle) {
     
@@ -231,7 +216,12 @@ void reflect_along(TEMPivec2 anchor, Angle angle) {
 }
 
 
-void setScreenView(int current_screen_width, int current_screen_height) {
+struct viewCalculations {
+  mat4 view;
+  mat4 view_inverse;
+};
+
+viewCalculations setScreenView(int current_screen_width, int current_screen_height) {
 
   int level_extent = (level_height>level_width ? level_height : level_width);
   float max_tile_length = 1.5f / level_extent;
@@ -253,16 +243,16 @@ void setScreenView(int current_screen_width, int current_screen_height) {
 
   //  printf("Tile width: %f height %f\n", tile_width, tile_height);
 
-  TEMPvec3 view_scale = {tile_width, tile_height, 1.0f};
+  vec3 view_scale = {tile_width, tile_height, 1.0f};
     
   // Setup view and view inverse
-  TEMPmat4 identity =
+  mat4 identity =
     {1,0,0,0,
      0,1,0,0,
      0,0,1,0,
      0,0,0,1};
 
-  TEMPmat4 view = identity;
+  mat4 view = identity;
   view.yy = -1;
   
   view.xx *= view_scale.x;
@@ -270,23 +260,23 @@ void setScreenView(int current_screen_width, int current_screen_height) {
   view.zz *= view_scale.z;
   
 
-  TEMPmat4 trans = identity;
+  mat4 trans = identity;
   trans.xw += shift_to_center.x;
   trans.yw += shift_to_center.y;
   trans.zw += shift_to_center.z;
 
-  TEMPmat4 v_trans = view * trans;
+  mat4 v_trans = view * trans;
   view = v_trans;
  
  
   //TODO: find a better way to calcuate view_inverse
-  view_inverse = identity;
-  TEMPmat4 trans2 = identity;
+  mat4 view_inverse = identity;
+  mat4 trans2 = identity;
   trans2.xw += shift_to_center.x;
   trans2.yw += shift_to_center.y;
   trans2.zw += shift_to_center.z;
 
-  TEMPmat4 view_inverse_trans = view_inverse * trans2;
+  mat4 view_inverse_trans = view_inverse * trans2;
 
   view_inverse = view_inverse_trans;
 
@@ -300,57 +290,29 @@ void setScreenView(int current_screen_width, int current_screen_height) {
   view_inverse.xw *= -1;
 
 
-  int objNum = getObjectCount();
-
-  for(int i=0; i<objNum; i++) {
-    gameObject *myObj = getObject(i); //NOTE: assumes internal indexing is contiguous
-    myObj->view = view;
-  }
-    
-  //  bgShader->setFloat("tileLength", TILE_LENGTH);
-  //frontGridShader->setFloat("tileLength", TILE_LENGTH);
-    
+  viewCalculations result = {view, view_inverse};
+  return result;
 
 }
+
+
 
 void loadLevel(int level_num) {
 
   for(int yid=0; yid<board_height; yid++) {
     for(int xid=0; xid<board_width; xid++) {
       board[yid][xid] = 0;
-      highlights[yid][xid] = 0;
     }
   }
   tiles.clear();
-  tileIds.clear();
 
   player_pos_original = {0,0};
-
   level_height = 0;
   level_width = 0;
 
 
-  //IMPORTANT!!
-  clearAllObjects();
-
-
-
 
         
-  float background_vertices[] = {
-    -50.0f, -50.0f, 0.0f, 
-    -50.0f, 50.0f, 0.0f,  
-    50.0f, 50.0f, 0.0f,   
-    50.0f, -50.0f, 0.0f,  
-  };
-  unsigned int background_indices[] = {
-    0, 1, 2,
-    2, 3, 0
-  };
-  //Texture water_texture = Texture("textures/water.jpg");
-  int bgID = createNewRenderObject(background_vertices, 12, background_indices, 6, "shaders/background.shader");
-  gameObject *bgObj = getObject(bgID);
-  bgObj->model = identity4;
   
   std::ifstream level_file;
   level_file.open("levels", std::ios::in);
@@ -386,18 +348,6 @@ void loadLevel(int level_num) {
     if(line_has_int) {
       if(blocks_passed == 2*level_num) {
 	
-	// Floor tiles
-	float vertices[] = {
-	  0.0f, 0.0f, 0.0f,
-	  1.0f, 0.0f, 0.0f,
-	  1.0f, 1.0f, 0.0f,
-	  0.0f, 1.0f, 0.0f,
-	};  
-	unsigned int indices[] = {
-	  0, 1, 2,
-	  2, 3, 0
-	};
-
 	for(int i=0; i<ints_on_this_line.size(); i++) {
 	  int this_int = ints_on_this_line[i];
 
@@ -408,49 +358,19 @@ void loadLevel(int level_num) {
 	  if(this_int == 1) { // Regular tile
 	    tile.type = 1;
 	    tiles.push_back(tile);
-	    int tileID = createNewRenderObject(vertices, 12, indices, 6, "shaders/shader.shader");
-	    tileIds.push_back(tileID);
-	    gameObject *tileObj = getObject(tileID);
-	    tileObj->model = TEMPmat4 {
-	      1.f, 0.f, 0.f, (float)tile.xid,
-	      0.f, 1.f, 0.f, (float)tile.yid,
-	      0.f, 0.f, 1.f, 0.f,
-	      0.f, 0.f, 0.f, 1.f
-	    };
-
+	    //	    int tileID = createNewRenderObject(vertices, 12, indices, 6, "shaders/shader.shader");
 
 	    
 
 	  } else if(this_int == 2) { // Goal tile
 	    tile.type = 2;
 	    tiles.push_back(tile);
-	    int tileID = createNewRenderObject(vertices, 12, indices, 6, "shaders/shader.shader");
-	    tileIds.push_back(tileID);
-	    gameObject *tileObj = getObject(tileID);
-	    tileObj->model = TEMPmat4 {
-	      1.f, 0.f, 0.f, (float)tile.xid,
-	      0.f, 1.f, 0.f, (float)tile.yid,
-	      0.f, 0.f, 1.f, 0.f,
-	      0.f, 0.f, 0.f, 1.f
-	    };
-	    
-
 
 	  } else if(this_int == 3) { // Player tile
 	    
 	    tile.type = 1; // regular tile from board's perspective
 	    tiles.push_back(tile);
 	    player_pos_original = {i, yid};
-	    int tileID = createNewRenderObject(vertices, 12, indices, 6, "shaders/shader.shader");
-	    tileIds.push_back(tileID);
-	    gameObject *tileObj = getObject(tileID);
-	    tileObj->model = TEMPmat4 {
-	      1.f, 0.f, 0.f, (float)tile.xid,
-	      0.f, 1.f, 0.f, (float)tile.yid,
-	      0.f, 0.f, 1.f, 0.f,
-	      0.f, 0.f, 0.f, 1.f
-	    };
-	    
 	    
 	  }
 
@@ -494,131 +414,32 @@ void loadLevel(int level_num) {
   }
   level_file.close();
 
-
-  float player_vertices[] = {
-    0.15f, 0.15f, 0.0f,
-    0.85f, 0.15f, 0.0f,
-    0.85f, 0.85f, 0.0f,
-    0.15f, 0.85f, 0.0f,
-  };
-  unsigned int player_indices[] = {
-    0, 1, 2,
-    2, 3, 0
-  };
-  int playerID = createNewRenderObject(player_vertices, 12, player_indices, 6, "shaders/player.shader");
-  gameObject *playerObj = getObject(playerID);
-  playerObj->model = TEMPmat4 {
-    1.f, 0.f, 0.f, (float) player_pos_original.x,
-    0.f, 1.f, 0.f, (float) player_pos_original.y,
-    0.f, 0.f, 1.f, 0.f,
-    0.f, 0.f, 0.f, 1.f
-  };
-
-
-
-  // FRONT GRID VAO
-
-  float front_grid_vertices[] = {
-    0.0f, 0.0f, 0.0f,
-    0.0f, 1.0f, 0.0f,
-    1.0f, 1.0f, 0.0f,
-    1.0f, 0.0f, 0.0f
-  };
-  unsigned int front_grid_indices[] = {
-    0, 1, 2,
-    2, 3, 0
-  };
-
-
-      
-    //frontGridShader->setMat3("basis", animation_basis);
-    TEMPmat3 identity =
-      {1, 0, 0,
-       0, 1, 0,
-       0, 0, 1};
-    //frontGridShader->setMat3("basis", identity);
-    //frontGridShader->setInt("level_width", level_width);
-    //    frontGridShader->setInt("level_height", level_height);	
-
-    for(int i = -10; i<15; i++) {
-      for(int j = -10; j<15; j++) {
-	int frontGridID = createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6, "shaders/frontGridShader.shader");
-	gameObject *frontGridObj = getObject(frontGridID);
-	frontGridObj->model = TEMPmat4 {
-	  1.f, 0.f, 0.f, (float)i,
-	  0.f, 1.f, 0.f, (float)j,
-	  0.f, 0.f, 1.f, 0.f,
-	  0.f, 0.f, 0.f, 1.f
-	};
-
-      }
-    }
-
-
-
-
-  int frontGridID = createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6, "shaders/frontGridShader.shader");
-  gameObject *frontGridObj = getObject(frontGridID);
-  frontGridObj->model = identity4;
   
-
-
-  //cout << "level height "<< level_height << " width "<< level_width << endl;
-  
-  
-  //cout << "=== Loading new level ===" << endl;
-
   //Reset flags
   game_ended = false;
-
   mirrorState = MIRROR_INACTIVE;
-
-  
   sleep_active = false;
 
-
   //Setup basis
-  target_basis = TEMPimat3();
-  basis = TEMPimat3();
+  target_basis = imat3();
+  basis = imat3();
 
-
-
-
-  //Update shaders
-
-  TEMPmat4 TEMPmodel = identity4;
-  TEMPmodel.xw = (float) player_pos_original.x;
-  TEMPmodel.yw = (float) player_pos_original.y;
-
-  gameObject *player = getObject(playerObjectID);
-  player->model = TEMPmodel;
-
-  /*
-  bgShader->use();
-  bgShader->setFloat("tileLength", TILE_LENGTH);
-  frontGridShader->use();
-  frontGridShader->setFloat("tileLength", TILE_LENGTH);
-  */
 }
 
 
 
 
 
-void onPlayerMovementFinished(float time) {
+void onPlayerMovementFinished(uint32 time) {
 
   // Update game state
   basis = target_basis;
 
-  TEMPivec2 player_lower_left = {10000, 10000};
+  ivec2 player_lower_left = {10000, 10000};
   for(int yshift=0; yshift<2; yshift++) {
     for(int xshift=0; xshift<2; xshift++) {
-      TEMPivec3 rawCorner = TEMPivec3{player_pos_original.x + xshift, player_pos_original.y + yshift, 1};
-      TEMPivec3 corner = basis * rawCorner;
-      /**
-      corner.x += basis.xz;
-      corner.y += basis.yz;
-      **/
+      ivec3 rawCorner = ivec3{player_pos_original.x + xshift, player_pos_original.y + yshift, 1};
+      ivec3 corner = basis * rawCorner;
 
       if(corner.x < player_lower_left.x || corner.y < player_lower_left.y) {
 	player_lower_left = {corner.x, corner.y};
@@ -628,7 +449,6 @@ void onPlayerMovementFinished(float time) {
   }
   
   //printf("Lower left corner: (%f, %f)\n", player_lower_left.x, player_lower_left.y);
-
 
   // Check if player is supported
   bool is_player_supported = true;
@@ -671,6 +491,7 @@ void onPlayerMovementFinished(float time) {
 }
 
 
+
 void onSleepTimedOut() {
   sleep_active = false;
   reflect_along(mirrorFragmentAnchor, mirrorFragmentAngle);
@@ -680,139 +501,163 @@ void onSleepTimedOut() {
 
 
 
-
-
-
-
-
-
-
-
-
-void gameUpdateAndRender(gameInput input, gameMemory *memory) {
-  
-  controllerInput controller = input.controllers[0];
-  float xrel = (float) (controller.mouseX - 0.5f*input.screenWidth)
-    / (float) (0.5f*input.screenWidth);
-  float yrel = (float) -1.0f * (controller.mouseY-0.5f*input.screenHeight)
-    / (float) (0.5f*input.screenHeight);
-
-
+void gameUpdateAndRender(gameInput input, gameMemory *memory, RenderMemoryInfo *renderMemoryInfo) {
   if(!memory->isInitialized) {
-
     loadLevel(active_level);
-    //NOTE: also do this whenever load new level
-    setScreenView(input.screenWidth, input.screenHeight);
-
-
-    /*
-    for(int i=0; i<tileIds.size(); i++) {
-      gameObject *tileObj = getObject(tileIds[i]);
-      tileObj->model = identity4;
-      tileObj->view = identity4;
-    }
-    */
-
-
-    /**
-  // set up vertex data (and buffer(s)) and configure vertex attributes
-
-  float anchor_vertices[] = {
-    -1.0f, -1.0f, 0.0f,
-    -1.0f, 1.0f, 0.0f,
-    1.0f, 1.0f, 0.0f,
-    1.0f, -1.0f, 0.0f,
-  };
-  unsigned int anchor_indices[] = {
-    0, 1, 2,
-    2, 3, 0
-  };
-
-  createNewRenderObject(anchor_vertices, 12, anchor_indices, 6, "shaders/anchorShader.shader");  
-    **/
-    
-
-#if 0
-  // MIRROR VAO
-  float mirror_vertices[] = {
-    0.0f, 0.0f, 0.0f,
-    0.0f, 1.0f, 0.0f,
-    1.0f, 1.0f, 0.0f,
-    1.0f, 0.0f, 0.0f,
-  };
-  unsigned int mirror_indices[] = {
-    0, 1, 2,
-    2, 3, 0
-  };
-  createNewRenderObject(mirror_vertices, 12, mirror_indices, 6, "shaders/mirrorShader.shader");
-
-  
-
-    /**
-    float vertices[] = {
-      -0.5f, -0.5f, 0.0f,
-      -0.5f, 0.5f, 0.0f,
-      0.5f, 0.5f, 0.0f,
-      0.5f, -0.5f, 0.0f,	  
-    };
-
-    unsigned int indices[] = {
-      0, 1, 2,
-      2, 3, 0
-    };
-
-    myObjectID = createNewRenderObject(vertices, 12, indices, 6,
-				       "shaders/testShader.shader");
-
-    obj2 = createNewRenderObject(vertices, 12, indices, 6,
-				 "shaders/testShader.shader");
-    **/
-
-#endif
-
-
-    
     memory->isInitialized = true;
   }
+  
+  controllerInput controller = input.controllers[0];
 
 
+  
   if(controller.rKey.transitionCount && controller.rKey.endedDown) {
     //reset level
     std::cout << "RESETTING LEVEL: " << active_level << std::endl;
-    loadLevel(active_level);
-    setScreenView(input.screenWidth, input.screenHeight);
-	
+    loadLevel(active_level);	
   }
-
   if(controller.leftArrow.transitionCount && controller.leftArrow.endedDown) {
     if(active_level > 0) {
       active_level -= 1;
       //cout << "LOADING LEVEL: " << active_level << endl;
       loadLevel(active_level);
-      setScreenView(input.screenWidth, input.screenHeight);
     } else {
       //cout << "That's already the first level\n";
     }
   }
-
   if(controller.rightArrow.transitionCount && controller.rightArrow.endedDown) {
     active_level += 1;
     //cout << "LOADING LEVEL: " << active_level << endl;
     loadLevel(active_level);
-    setScreenView(input.screenWidth, input.screenHeight);
+  }
+
+  
+  viewCalculations viewResult = setScreenView(input.screenWidth, input.screenHeight);
+
+  float xrel = (float) (controller.mouseX - 0.5f*input.screenWidth)
+    / (float) (0.5f*input.screenWidth);
+  float yrel = (float) -1.0f * (controller.mouseY-0.5f*input.screenHeight)
+    / (float) (0.5f*input.screenHeight);
+
+  vec4 coord_rel = {xrel, yrel, 0.0f, 1.0f};
+  vec4 coord_orig = viewResult.view_inverse * coord_rel; 
+  vec2 mouse_coords = vec2(coord_orig.x, coord_orig.y);
+
+
+  // Animation basis
+  if(sleep_active && input.currentTime >= sleepStartTime + SLEEP_DURATION) {
+    onSleepTimedOut();
+  }
+  mat3 animation_basis = target_basis;
+  if(is_animation_active) {
+    weight += 0.0025f * input.deltaTime;
+
+    if(weight >= 1) {
+      is_animation_active = false;
+      onPlayerMovementFinished(input.currentTime);
+	
+    } else {
+      //Lerp basis
+      animation_basis  = basis * mat3() * (1.0f-weight)
+	+ target_basis * mat3() * (weight);
+    }
+
+  }
+
+  //Background
+  renderObject *renderMemory = renderMemoryInfo->memory;
+  *renderMemory = renderObject {BACKGROUND, identity4, viewResult.view};
+  renderMemory++;
+  
+  
+  //Floor tiles
+  for(int i=0; i<tiles.size(); i++) {
+    mat4 model = identity4;
+    model.xw = (float) tiles[i].xid;
+    model.yw = (float) tiles[i].yid;
+
+    *renderMemory = renderObject {FLOOR_TILE, model, viewResult.view};
+    if(tiles[i].type == 2) {
+      renderMemory->highlight_key = 1;
+    } else {
+      renderMemory->highlight_key = 0;
+    }
+    renderMemory++;
+  }
+
+
+  //Player  
+  mat4 model = identity4;
+  model.xw = (float) player_pos_original.x;
+  model.yw = (float) player_pos_original.y;
+  *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
+  renderMemory++;
+
+
+  //Anchors
+
+  for(int yid=0; yid<board_height; yid++) {
+    for(int xid=0; xid<board_width; xid++) {
+      if(board[yid][xid] != 0) {
+
+	int highlight_key = 0;
+
+	if(mirrorState==MIRROR_INACTIVE) {
+	  ivec2 myVec = {xid,yid};
+	  if(nearestAnchor(mouse_coords) == myVec
+	     && magnitude(mouse_coords - myVec) < MOUSE_HOVER_SNAP_DIST) {
+	    highlight_key = 1;
+	  }
+	}
+	if(mirrorState==MIRROR_DRAGGABLE || mirrorState==MIRROR_LOCKED) {
+	  bool isTheAnchor = (ivec2{xid,yid} == mirrorFragmentAnchor);
+	  bool passesThroughLine = false;
+	    
+	  ivec2 point = {xid, yid};
+	  vec2 coord1 = mirrorFragmentAnchor;
+	  //TODO: find more accurate way of representing coord2?
+	  vec2 coord2 = mirrorFragmentAnchor + mirrorFragmentMag * toVec(mirrorFragmentAngle);
+
+	  Angle current_to_coord;
+	  bool pointToCoordValid = classifyVector(&current_to_coord, point - coord1);
+	      
+	  if(pointToCoordValid) {
+	    float pointToCoordLength = magnitude(point-coord1);
+	    float pointCoordDot = dot(point-coord1, coord2-coord1);
+	    
+	    if(mirrorFragmentAngle == current_to_coord
+	       && abs(mirrorFragmentMag) > pointToCoordLength
+	       && pointCoordDot > 0) {
+	           
+	      passesThroughLine = true;
+	    }	    
+							    
+	    if(isTheAnchor || passesThroughLine) {
+	      highlight_key = 1;	      
+	    }
+	  }
+	}
+	  
+	mat4 anchorModel = identity4;
+	anchorModel.xw = (float)xid;
+	anchorModel.yw = (float)yid;
+
+	*renderMemory = renderObject{ANCHOR, anchorModel, viewResult.view};
+	renderMemory->highlight_key = highlight_key;
+	renderMemory++;
+	    
+      }
+    }
   }
   
 
-#if 0
-  TEMPvec4 coord_rel = {xrel, yrel, 0.0f, 1.0f};
-  TEMPvec4 coord_orig = view_inverse * coord_rel;
- 
-  TEMPvec2 mouse_coords = TEMPvec2(coord_orig.x, coord_orig.y);
 
+  
+  //Mirror
 
   if(mirrorState == MIRROR_DRAGGABLE) {
 
-    TEMPvec2 d = mouse_coords - mirrorFragmentAnchor;
+    vec2 d = mouse_coords - mirrorFragmentAnchor;
     float theta  = atan2(d.y, d.x);
     float mag = magnitude(d);
 
@@ -841,19 +686,19 @@ void gameUpdateAndRender(gameInput input, gameMemory *memory) {
     //
     // Calculate fragment magnitude
     //
-    TEMPvec2 mouseToFragmentEnd;
+    vec2 mouseToFragmentEnd;
     switch(mirrorFragmentAngle) {
     case 0:
-      mouseToFragmentEnd = TEMPvec2{d.x, 0.0f};
+      mouseToFragmentEnd = vec2{d.x, 0.0f};
       break;
     case 1:
-      mouseToFragmentEnd = d + normalize(TEMPvec2{1.,-1}) * mag*sin(theta - PI/4);
+      mouseToFragmentEnd = d + normalize(vec2{1.,-1}) * mag*sin(theta - PI/4);
       break;
     case 2:
-      mouseToFragmentEnd = TEMPvec2{0.0f, d.y};
+      mouseToFragmentEnd = vec2{0.0f, d.y};
       break;
     case 3:
-      mouseToFragmentEnd = d + normalize(TEMPvec2(-1.0f,-1.0f)) * mag*sin(3*PI/4 - theta);
+      mouseToFragmentEnd = d + normalize(vec2(-1.0f,-1.0f)) * mag*sin(3*PI/4 - theta);
       break;
     }
 
@@ -864,11 +709,6 @@ void gameUpdateAndRender(gameInput input, gameMemory *memory) {
     }
     
   }
-
-
-
-
-  
 
    
   if(controller.mouseLeft.transitionCount && controller.mouseLeft.endedDown) {
@@ -909,14 +749,13 @@ void gameUpdateAndRender(gameInput input, gameMemory *memory) {
 	for(int xid=0; xid < (level_width+1); xid++) {
 	  if(board[yid][xid] == 1) {
 
-	    
-	    TEMPivec2 point = {xid, yid};
-	    TEMPivec2 coord1 = mirrorFragmentAnchor;
+	    ivec2 point = {xid, yid};
+	    ivec2 coord1 = mirrorFragmentAnchor;
 	    //TODO: find more accurate way of representing coord2?
-	    TEMPvec2 coord2 = mirrorFragmentAnchor + mirrorFragmentMag * toVec(mirrorFragmentAngle);
+	    vec2 coord2 = mirrorFragmentAnchor + mirrorFragmentMag * toVec(mirrorFragmentAngle);
 	          
 	    Angle current_to_coord;
-	    TEMPvec2 pointToCoord = point - coord1;
+	    vec2 pointToCoord = point - coord1;
 	    bool pointToCoordValid = classifyVector(&current_to_coord, point - coord1);
 	          	      
 	    if(pointToCoordValid) {
@@ -947,66 +786,60 @@ void gameUpdateAndRender(gameInput input, gameMemory *memory) {
     }
   }
 
-
-  uint32 currentFrame = input.currentTime;//TODO: get time
-  //  deltaTime = currentFrame - lastFrame;
-  //lastFrame = currentFrame;
-
-  if(sleep_active && currentFrame >= sleepStartTime + SLEEP_DURATION) {
-    onSleepTimedOut();
-  }
-
-  //gameObject bgObj = getObject(bgObjecttID);
-  //bgShader->setFloat("time", glfwGetTime());
-
-
-  for(int i=0; i<tiles.size(); i++) {
-
-    TEMPmat4 TEMPmodel = identity4;
-    //TODO: imat4
-    TEMPmodel.xw = (float) tiles[i].xid;
-    TEMPmodel.yw = (float) tiles[i].yid;
-      
-    gameObject *tileObj = getObject(tileIds[i]);
-    tileObj->model = TEMPmodel;
-
-    bool is_goal = false;
-    if(tiles[i].type == 2) {
-      is_goal = true;
-    }
-
-    
-    //ourShader->setBool("is_goal", is_goal);
-    
-    //floor_tiles_data.draw();
-  }
   
+  if(mirrorState==MIRROR_DRAGGABLE || mirrorState==MIRROR_LOCKED) {
+    vec2 diff = mirrorFragmentMag * toVec(mirrorFragmentAngle);
+      
+    float x1, y1, x2, y2;
+    vec2 thickness_offset_dir;
+
+    thickness_offset_dir = vec2(diff.y, -1 * diff.x);
+    thickness_offset_dir = normalize(thickness_offset_dir);
+    x1 = (float) mirrorFragmentAnchor.x;
+    y1 = (float) mirrorFragmentAnchor.y;
+    x2 = x1 + diff.x;
+    y2 = y1 + diff.y;	
+    // printf("Mirror segment: (%i, %i) to (%i, %i) Thickness dir: (%f, %f)\n", x1, y1, x2, y2, thickness_offset_dir.x, thickness_offset_dir.y);
+      
+    float thickness = 0.05f;
+
+    float mirror_vertices[12];
+    
+    mirror_vertices[0] = x1 + thickness_offset_dir.x * thickness;
+    mirror_vertices[1] = y1 + thickness_offset_dir.y * thickness;
+    mirror_vertices[2] = 0;
+      
+    mirror_vertices[3] = x1 - thickness_offset_dir.x * thickness;
+    mirror_vertices[4] = y1 - thickness_offset_dir.y * thickness;
+    mirror_vertices[5] = 0;    
+      
+    mirror_vertices[6] = x2 - thickness_offset_dir.x * thickness;
+    mirror_vertices[7] = y2 - thickness_offset_dir.y * thickness;
+    mirror_vertices[8] = 0;    
+
+    mirror_vertices[9] = x2 + thickness_offset_dir.x * thickness;
+    mirror_vertices[10] = y2 + thickness_offset_dir.y * thickness;
+    mirror_vertices[11] = 0;    
 
 
+    updateRenderContextVertices(MIRROR, mirror_vertices, 12);
+    *renderMemory = renderObject{MIRROR, identity4, viewResult.view};
+    renderMemory++;
+    
+  }
+
+
+  //Front Grid
+  *renderMemory = renderObject{FRONT_GRID, identity4, viewResult.view};
+  renderMemory++;
+
+  //Make sure that we didn't overuse memory in our render buffer
+  assert(renderMemory - renderMemoryInfo->memory < renderMemoryInfo->count);
 
   /**
-  TEMPmat4 model = {
-    1.f, 0.f, 0.f, xrel * 0.5f,
-    0.f, 1.f, 0.f, yrel * 0.5f,
-    0.f, 0.f, 1.f, 0.f,
-    0.f, 0.f, 0.f, 1.f
-  };
-
-  gameObject *myObject = getObject(myObjectID);
-
-  myObject->model = model;
-
-
-  TEMPmat4 model2 = {
-    xrel * 0.5f, 0.f, 0.f, 0.f,
-    0.f, yrel * 0.5f, 0.f, 0.f,
-    0.f, 0.f, 1.f, 0.f,
-    0.f, 0.f, 0.f, 1.f
-  };
-
-  gameObject *myObject2 = getObject(obj2);
-  myObject2->model = model2;
+  std::cout << "Mirror state: " << mirrorState << "\n";
+  std::cout << "Current time: " << input.currentTime << "\n";
+  std::cout << "Weight: "<< weight << "\n";
   **/
 
-  #endif
 }

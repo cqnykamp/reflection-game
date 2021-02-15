@@ -5,7 +5,7 @@ layout (location = 0) in vec3 aPos;
 out vec2 uv;
 
 uniform mat4 model;
-//uniform mat3 basis;
+uniform mat3 basis;
 uniform mat4 view;
 
 
@@ -15,8 +15,7 @@ void main() {
   vec4 pos_orig = model * vec4(aPos.x, aPos.y, 0.0f, 1.0f);
   pos_orig.z = 1.0f; // Tiled coord system assumes level on z=1
 
-  vec3 pos = pos_orig.xyz;
-  //vec3 pos = basis * pos_orig.xyz;
+  vec3 pos = basis * pos_orig.xyz;
   
   gl_Position = view * vec4(pos.x, pos.y, 0.0f, 1.0f);
 

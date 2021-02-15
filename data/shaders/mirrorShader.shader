@@ -23,9 +23,11 @@ out vec4 FragColor;
 
 in vec2 uv;
 
-uniform bool highlighted;
+// uniform bool highlighted;
 
 void main() {
+  bool highlighted = true;
+  
   vec3 bordercolor = vec3(0.7, 0.7f, 0.7f);
 
   if(highlighted) {

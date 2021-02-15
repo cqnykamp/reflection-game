@@ -3,6 +3,10 @@
 
 #include "gameutil.cpp"
 
+#define assert(expression) \
+  if(!(expression)) {*(int *)0 = 0;}
+
+
 struct buttonState {
   int transitionCount;
   bool endedDown;
@@ -23,28 +27,29 @@ struct gameInput {
   int screenHeight;
   int screenWidth;
   uint32 currentTime;
+  uint32 deltaTime;
   controllerInput controllers[4];
 };
 
-struct gameObject {
-  TEMPmat4 model;
-  TEMPmat4 view;
+
+enum RenderContext {
+  //NOTE: 0 means nothing there, don't draw
+  PLAYER = 1,
+  BACKGROUND = 2,
+  FLOOR_TILE = 3,
+  FRONT_GRID = 4,
+  MIRROR = 5,
+  ANCHOR = 6,
+  //GOAL,
 };
 
+
 struct renderObject {
-  unsigned int vaoID;
-  unsigned int vboID;
-  unsigned int eboID;
-  unsigned int shaderID;
-  int indicesCount;
-
-  gameObject gameObj;
-
-  //  TEMPmat4 model;
-
-  bool isInitialized;
-  //bool dynamicDraw;
-  
+  RenderContext renderContext;
+  mat4 model;
+  mat4 view;
+  mat3 basis;
+  int highlight_key;
 };
 
 
@@ -55,16 +60,12 @@ struct gameMemory {
 };
 
 
+struct RenderMemoryInfo {
+  int count;
+  renderObject *memory;
+};
 
-
-
-int createNewRenderObject(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath);
-
-gameObject* getObject(int id);
-
-int getObjectCount();
-
-void clearAllObjects();
+void updateRenderContextVertices(RenderContext context, float *vertices, int verticesLength);
 
 
 #define REFLECT_H
