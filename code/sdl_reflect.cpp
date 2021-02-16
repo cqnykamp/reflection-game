@@ -34,9 +34,6 @@ typedef double real64;
 
 #define global static
 
-#define PERMANENT_STORAGE_SIZE (2 * 1024)
-#define TEMPORARY_STORAGE_SIZE (2 * 1024)
-
 const int amplitude = 0;//10000;
 const int sampleRate = 48000;
 
@@ -48,70 +45,6 @@ unsigned int vbo[10];
 unsigned int ebo[10];
 unsigned int shader[10];
 unsigned int indicesCount[10];
-
-
-void loadLevelFromFile(int levelNum, LoadedLevel *data) {
-
-  SDL_memset(data, 0, sizeof(LoadedLevel));
-
-  std::fstream file;
-  file.open("levels", std::ios::in);
-
-  if(!file || !file.is_open()) {
-    std::cout << "Error: file not opened successfully\n";    
-    return;
-  }
-
-  int readingBlock = 0;
-  bool onNumBlock = false;
-  
-  char lastChar = 'Q';
-  char c;  
-  while(file.get(c)) {
-    if(c=='0' || c=='1' || c=='2' || c=='3') {
-      onNumBlock = true;
-
-      if(readingBlock == 2*levelNum) {
-	//Maximum board space: 512
-	assert(data->tileDataCount < 512);
-	data->tileData[data->tileDataCount] = c;
-	data->tileDataCount++;
-      } else if(readingBlock == 2*levelNum + 1) {
-	//Maximum board space: 512
-	assert(data->pointDataCount < 512);
-	data->pointData[data->pointDataCount] = c;
-	data->pointDataCount++;
-      }
-      
-    } else if(c=='\n' && lastChar=='\n') {
-	//new paragraph
-	if(onNumBlock) {
-	  readingBlock += 1;
-	}
-	onNumBlock = false;
-	
-    } else if(c=='\n' && onNumBlock) {
-      //just single line break, continue as normal
-
-
-      if(readingBlock == 2*levelNum) {
-	//Maximum board space: 512
-	assert(data->tileDataCount < 512);
-	data->tileData[data->tileDataCount] = c;
-	data->tileDataCount++;
-      } else if(readingBlock == 2*levelNum + 1) {
-	//Maximum board space: 512
-	assert(data->pointDataCount < 512);
-	data->pointData[data->pointDataCount] = c;
-	data->pointDataCount++;
-      }
-           
-    }
-
-    lastChar = c;
-  }
-
-}
 
 
 unsigned int loadShaderFromFile(const char *filePath) {    
@@ -228,7 +161,6 @@ void updateRenderContextVertices(RenderContext context, float *vertices, int ver
 //TODO: figure out how this program starts. Why do we need wmain?
 int wmain(int argc, char* args[])
 {
-
   if(SDL_Init( SDL_INIT_EVERYTHING ) == 0) {
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
@@ -243,6 +175,7 @@ int wmain(int argc, char* args[])
 
       SDL_GLContext context = SDL_GL_CreateContext(window);
       if(context) {
+
 
 	//TODO: account for possible failure
 	gladLoadGL((GLADloadfunc) SDL_GL_GetProcAddress);
@@ -386,16 +319,10 @@ int wmain(int argc, char* args[])
 	RenderMemoryInfo renderMemoryInfo = {maxRenderObjects, renderObjects};
 
 
-
-	//Game Memory
 	gameMemory memory;
 	memory.isInitialized = false;
-	memory.permanentStorageSize = PERMANENT_STORAGE_SIZE;
-	memory.temporaryStorageSize = TEMPORARY_STORAGE_SIZE;
-	memory.permanentStorage = malloc(PERMANENT_STORAGE_SIZE +
-					 TEMPORARY_STORAGE_SIZE);
-	memory.temporaryStorage = (void *)((char *) memory.permanentStorage +
-					   PERMANENT_STORAGE_SIZE);
+	memory.permanentStorage = malloc(10 * 1024);
+	memory.temporaryStorage = (void *)((char *) memory.permanentStorage + 5*1024);
 	SDL_memset(memory.permanentStorage, 0, 10 * 1024);
 
 	

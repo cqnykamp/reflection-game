@@ -1,21 +1,10 @@
 #if !defined(REFLECT_H)
 
-//TODO: define internal and external run mode
-// and filter out asserts
 
 #include "gameutil.cpp"
 
 #define assert(expression) \
   if(!(expression)) {*(int *)0 = 0;}
-
-
-struct LoadedLevel {
-  char tileData[512];
-  char pointData[512];
-  int tileDataCount;
-  int pointDataCount;
-};
-
 
 
 struct buttonState {
@@ -66,8 +55,6 @@ struct renderObject {
 
 struct gameMemory {
   bool isInitialized;
-  int permanentStorageSize;
-  int temporaryStorageSize;
   void *permanentStorage;
   void *temporaryStorage;
 };
@@ -77,8 +64,6 @@ struct RenderMemoryInfo {
   int count;
   renderObject *memory;
 };
-
-void loadLevelFromFile(int levelNum, LoadedLevel *data);
 
 void updateRenderContextVertices(RenderContext context, float *vertices, int verticesLength);
 
