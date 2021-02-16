@@ -1,11 +1,9 @@
 //TODO: use aliases for game state structs on some functions
 
-
 #include "reflect.h"
 
 #include "gameutil.cpp"
 
-#include <vector>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -16,6 +14,9 @@
 
 #define BOARD_WIDTH (20)
 #define BOARD_HEIGHT (20)
+#define MAX_TILES (256)
+
+#define SLEEP_DURATION 600 // milliseconds
 
 
 struct GameState {
@@ -30,24 +31,26 @@ struct Tile {
   int type;
 };
 
+//TODO: store board and tiles as bitfields?
 struct LevelInfo {
   int level_height;
   int level_width;
   ivec2 player_pos_original;
   int board[BOARD_HEIGHT][BOARD_WIDTH];
 
+  Tile tiles[MAX_TILES];
+  int activeTiles;
+
+  bool hasSecondPlayer;
+  ivec2 secondPlayerStartPos;
 };
 
-//
-// Mirror State
-//
+
 enum MirrorState {
   MIRROR_INACTIVE,
   MIRROR_DRAGGABLE,
   MIRROR_LOCKED
 };
-
-
 enum Angle {
   RIGHT = 0,
   UP_RIGHT = 1,
@@ -55,11 +58,6 @@ enum Angle {
   UP_LEFT = 3,
 };
 
-
-
-
-#define SLEEP_DURATION 600 // milliseconds
-uint32 sleepStartTime;
 
 struct LevelState {
   imat3 basis;
@@ -70,31 +68,18 @@ struct LevelState {
   ivec2 mirrorFragmentAnchor;
 
   float weight;
+  uint32 sleepStartTime;
   bool is_animation_active;
   bool sleep_active = false;
 };
 
 
-//
-// Game Board State
-//
 
-
-//TODO: use simple array
-std::vector<Tile> tiles(25);
-std::vector<int> tileIds;
-
-
-
-
-//
-// Window Info
-//
-float TILE_LENGTH = 0.2f;
-vec3 shift_to_center = {-2.25f, -2.25f, 0.0f};
-float lastFrame = 0.0f;
-
-
+void * claimMemory(void **existingMemoryBuffer, int bytes) {
+  void *myNewMemory = *existingMemoryBuffer;
+  *existingMemoryBuffer = (void*)((char*)(*existingMemoryBuffer) + bytes);
+  return myNewMemory;
+}
 
 
 //
@@ -236,9 +221,9 @@ viewCalculations setScreenView(LevelInfo *levelInfo, int current_screen_width, i
 		      levelInfo->level_height : levelInfo->level_width);
   float max_tile_length = 1.5f / level_extent;
   max_tile_length = max_tile_length>0.2f ? 0.2f : max_tile_length;
-
   
-  shift_to_center = {-0.5f * (float)levelInfo->level_width, -0.5f* (float)levelInfo->level_height, 0.0f};
+  //  vec3 shift_to_center = {-2.25f, -2.25f, 0.0f};
+  vec3 shift_to_center = {-0.5f * (float)levelInfo->level_width, -0.5f* (float)levelInfo->level_height, 0.0f};
 
   float tile_width, tile_height;
   if(current_screen_width > current_screen_height) {
@@ -305,31 +290,38 @@ viewCalculations setScreenView(LevelInfo *levelInfo, int current_screen_width, i
 
 }
 
-void loadLevel(GameState *gameState, LevelInfo *levelInfo, LevelState *state, int level_num) {
+void loadLevel(GameState *gameState, LevelInfo *levelInfo, LevelState *state, void *tempMemory, int level_num) {
 
   for(int yid=0; yid<BOARD_HEIGHT; yid++) {
     for(int xid=0; xid<BOARD_WIDTH; xid++) {
       levelInfo->board[yid][xid] = 0;
     }
   }
-  tiles.clear();
 
+  for(int i=0; i<MAX_TILES; i++) {
+    levelInfo->tiles[i] = {0,0,0};
+  }
+
+
+  bool hasFoundPlayer = false;
   levelInfo->player_pos_original = {0,0};
   levelInfo->level_height = 0;
   levelInfo->level_width = 0;
+  levelInfo->secondPlayerStartPos = {0,0};
+  levelInfo->hasSecondPlayer = false;
 
-  LoadedLevel levelData;
-  loadLevelFromFile(level_num, &levelData);
-
-  int xid=0;
-  int yid=0;
-  for(int i=0; i < levelData.pointDataCount; i++) {
-    if(levelData.pointData[i] == '\n') {
+  LoadedLevel *levelData = (LoadedLevel *) claimMemory(&tempMemory, sizeof(LoadedLevel));
+  loadLevelFromFile(level_num, levelData);
+  
+  int8 xid=0;
+  int8 yid=0;
+  for(int i=0; i < levelData->pointDataCount; i++) {
+    if(levelData->pointData[i] == '\n') {
       xid=0;
       yid++;
       
     } else {
-      int thisVal = (int) (levelData.pointData[i] - '0');
+      int thisVal = (int) (levelData->pointData[i] - '0');
       
       levelInfo->board[yid][xid] = thisVal;
 
@@ -348,20 +340,30 @@ void loadLevel(GameState *gameState, LevelInfo *levelInfo, LevelState *state, in
 
   xid = 0;
   yid = 0;
-  for(int i=0; i < levelData.tileDataCount; i++) {
-    if(levelData.tileData[i] == '\n') {
+  levelInfo->activeTiles = 0;
+  for(int i=0; i < levelData->tileDataCount; i++) {
+    if(levelData->tileData[i] == '\n') {
       xid=0;
       yid++;
     } else {
-      int thisVal = (int) (levelData.tileData[i] - '0');
+      int8 thisVal = (int8) (levelData->tileData[i] - '0');
 
-      if(thisVal == 1) { // Regular tile
-	tiles.push_back(Tile {xid, yid, 1});
-      } else if(thisVal == 2) { // Goal tile
-	tiles.push_back(Tile {xid, yid, 2});
+      if(thisVal == 1 || thisVal ==2) { // Regular tile or goal tile
+	levelInfo->tiles[levelInfo->activeTiles] = Tile {xid, yid, thisVal};
+	levelInfo->activeTiles++;
+	
       } else if(thisVal == 3) { // Player tile
-	tiles.push_back(Tile {xid, yid, 1}); //regular tile from board's perspective
-	levelInfo->player_pos_original = {i, yid};
+	levelInfo->tiles[levelInfo->activeTiles] = Tile {xid, yid, 1}; //regular tile from board's perspective
+	levelInfo->activeTiles++;
+
+	if(hasFoundPlayer) {
+	  levelInfo->secondPlayerStartPos = {xid, yid};
+	  levelInfo->hasSecondPlayer = true;
+	} else {
+	  hasFoundPlayer = true;
+	  levelInfo->player_pos_original = {xid, yid};
+	}
+
       }
 
       if(thisVal != 0) {
@@ -377,109 +379,8 @@ void loadLevel(GameState *gameState, LevelInfo *levelInfo, LevelState *state, in
     }
   }
 
-#if 0    
-  std::fstream level_file;
-  level_file.open("levels", std::ios::in);
-
-  // If error opening file, quit
-  if(!level_file.is_open()) {
-    std::cout << "File not opened successfully!\n";
-    level_file.close();
-    return;
-  }
-
-  //Read from file
-    
-  int yid = 0;
-  int blocks_passed = 0;
-  bool prev_line_has_int = false;
-
-  std::string line;
-  while(getline(level_file, line)) {
-    
-    bool line_has_int = false;
-    std::vector<int> ints_on_this_line;
-    for(int i=0; i<line.length(); i++) {
-      char ch = line.at(i);
-      if(isdigit(ch)) {
-	line_has_int = true;
-	ints_on_this_line.push_back(ch - '0');
-      }
-    }
-
-    //cout << line << " (has ints: "<<(bool)line_has_int<<")\n";
-
-    if(line_has_int) {
-      if(blocks_passed == 2*level_num) {
-	
-	for(int i=0; i<ints_on_this_line.size(); i++) {
-	  int this_int = ints_on_this_line[i];
-
-	  struct Tile tile;
-	  tile.xid = i;
-	  tile.yid = yid;
-	  
-	  if(this_int == 1) { // Regular tile
-	    tile.type = 1;
-	    tiles.push_back(tile);
-	    //	    int tileID = createNewRenderObject(vertices, 12, indices, 6, "shaders/shader.shader");
-
-	  } else if(this_int == 2) { // Goal tile
-	    tile.type = 2;
-	    tiles.push_back(tile);
-
-	  } else if(this_int == 3) { // Player tile
-	    
-	    tile.type = 1; // regular tile from board's perspective
-	    tiles.push_back(tile);
-	    levelInfo->player_pos_original = {i, yid};
-	    
-	  }
-
-
-	  if(this_int != 0) {
-	    levelInfo->level_height = ((yid+1) > levelInfo->level_height) ? (yid+1) : levelInfo->level_height;
-	    levelInfo->level_width = ((i+1) > levelInfo->level_width) ? (i+1) : levelInfo->level_width;
-	  }
-	}
-	yid++;
-
-
-	
-      } else if(blocks_passed == 2*level_num + 1) {
-	for(int i=0; i<ints_on_this_line.size(); i++) {
-	  int this_int = ints_on_this_line[i];
-	  levelInfo->board[yid][i] = this_int;
-
-	  if(this_int != 0) {
-	    levelInfo->level_height = (yid>levelInfo->level_height) ? yid : levelInfo->level_height;
-	    levelInfo->level_width = (i>levelInfo->level_width) ? i : levelInfo->level_width;
-	  }
-
-
-	}
-	yid++;
-
-      }
-
-    } else {
-      if(prev_line_has_int) {
-	blocks_passed += 1;
-	yid = 0;
-
-	//cout << "[BLOCKS PASSED: "<<blocks_passed<<"]\n";
-      }
-    }
-
-    prev_line_has_int = line_has_int;
-        
-  }
-  level_file.close();
-#endif
-
   assert(levelInfo->level_height < BOARD_HEIGHT);
   assert(levelInfo->level_width < BOARD_WIDTH);
-
   
   //Reset flags
   gameState->game_ended = false;
@@ -487,10 +388,8 @@ void loadLevel(GameState *gameState, LevelInfo *levelInfo, LevelState *state, in
   state->sleep_active = false;
 
   //Setup basis
-
-  //TODO: should this be identity?
-  state->target_basis = imat3();
-  state->basis = imat3();
+  state->target_basis = identity3i;
+  state->basis = identity3i;
 
 }
 
@@ -504,6 +403,7 @@ void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 ti
   state->basis = state->target_basis;
 
   ivec2 player_lower_left = {10000, 10000};
+  ivec2 secondPlayerLowerLeft = {10000, 10000};
   for(int yshift=0; yshift<2; yshift++) {
     for(int xshift=0; xshift<2; xshift++) {
       ivec3 rawCorner = ivec3{levelInfo->player_pos_original.x + xshift, levelInfo->player_pos_original.y + yshift, 1};
@@ -512,6 +412,21 @@ void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 ti
       if(corner.x < player_lower_left.x || corner.y < player_lower_left.y) {
 	player_lower_left = {corner.x, corner.y};
       }
+
+
+      if(levelInfo->hasSecondPlayer) {
+	ivec3 secondPlayerRawCorner = ivec3{
+	  levelInfo->secondPlayerStartPos.x + xshift,
+	  levelInfo->secondPlayerStartPos.y + yshift,
+	  1};
+	ivec3 secondPlayerCorner = state->basis * secondPlayerRawCorner;
+
+	if(secondPlayerCorner.x < secondPlayerLowerLeft.x ||
+	   secondPlayerCorner.y < secondPlayerLowerLeft.y) {
+	  secondPlayerLowerLeft = {secondPlayerCorner.x, secondPlayerCorner.y};
+	}
+      }
+      
     }
 
   }
@@ -522,29 +437,58 @@ void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 ti
   bool is_player_supported = true;
   int supporting_tile_id = -100;
 
+  bool isSecondPlayerSupported = true;
+
   //TODO: should boundary still be considered BOARD_WIDTH(or height) - 1?
   if(player_lower_left.y < 0 || player_lower_left.y > BOARD_HEIGHT-1 || player_lower_left.x < 0 || player_lower_left.x > BOARD_WIDTH-1) {
     // off the board
     is_player_supported = false;
+
+
+  } else if(levelInfo->hasSecondPlayer &&
+	    (secondPlayerLowerLeft.y < 0 ||
+	     secondPlayerLowerLeft.y > BOARD_HEIGHT-1 ||
+	     secondPlayerLowerLeft.x < 0 ||
+	     secondPlayerLowerLeft.x > BOARD_WIDTH-1)) {
+    // off the board
+    isSecondPlayerSupported = false;
+
   } else {
 
     is_player_supported = false;
-    for(int i=0; i<tiles.size(); i++) {
-      if(tiles[i].xid == player_lower_left.x && tiles[i].yid == player_lower_left.y) {
+    isSecondPlayerSupported = false;
+    for(int i=0; i<levelInfo->activeTiles; i++) {
+
+      bool firstPlayerOnThisTile = (levelInfo->tiles[i].xid == player_lower_left.x &&
+				    levelInfo->tiles[i].yid == player_lower_left.y);
+
+      if(!is_player_supported && firstPlayerOnThisTile) {
 	is_player_supported = true;
 	supporting_tile_id = i;
-	break;
       }
-    }
 
+      
+      bool secondPlayerOnThisTile;
+      if(levelInfo->hasSecondPlayer) {
+
+	secondPlayerOnThisTile= (levelInfo->tiles[i].xid == secondPlayerLowerLeft.x &&
+				 levelInfo->tiles[i].yid == secondPlayerLowerLeft.y);
+
+	if(!isSecondPlayerSupported && secondPlayerOnThisTile) {
+	  isSecondPlayerSupported = true;
+	  //TODO: supporting tile is goal?
+	}
+
+      }
         
+    }
   }
 
-  if(!is_player_supported) {
+  if(!is_player_supported || (levelInfo->hasSecondPlayer && !isSecondPlayerSupported)) {
     std::cout << "GOAL NOT SUPPORTED! Undoing...\n";
 
     //Start sleep counter
-    sleepStartTime = time;
+    state->sleepStartTime = time;
     state->sleep_active = true;
     
 
@@ -552,7 +496,7 @@ void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 ti
     state->mirrorState = MIRROR_INACTIVE;
 
     // Check if level complete  
-    if(tiles[supporting_tile_id].type == 2) {
+    if(levelInfo->tiles[supporting_tile_id].type == 2) {
       std::cout << "LEVEL COMPLETE!\n";
     }
   }
@@ -562,6 +506,8 @@ void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 ti
 
 
 void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo) {
+
+
 
   controllerInput controller = input.controllers[0];
 
@@ -582,27 +528,26 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
 
   //Make sure that we do not overrun our alloted space
   assert( (char*)state+sizeof(LevelState) - (char*)memoryInfo->permanentStorage < memoryInfo->permanentStorageSize);
-	  
+
+
+  void *tempMemory = memoryInfo->temporaryStorage;
   
   if(!memoryInfo->isInitialized) {
-    loadLevel(gameState, levelInfo, state, 0);
+    loadLevel(gameState, levelInfo, state, tempMemory, 0);
     memoryInfo->isInitialized = true;
   }
-
   
-  
-
   
   if(controller.rKey.transitionCount && controller.rKey.endedDown) {
     //reset level
     std::cout << "RESETTING LEVEL: " << gameState->active_level << std::endl;
-    loadLevel(gameState, levelInfo, state, gameState->active_level);	
+    loadLevel(gameState, levelInfo, state, tempMemory, gameState->active_level);	
   }
   if(controller.leftArrow.transitionCount && controller.leftArrow.endedDown) {
     if(gameState->active_level > 0) {
       //cout << "LOADING LEVEL: " << active_level << endl;
-      gameState->active_level += 1;
-      loadLevel(gameState, levelInfo, state, gameState->active_level);
+      gameState->active_level -= 1;
+      loadLevel(gameState, levelInfo, state, tempMemory, gameState->active_level);
     } else {
       //cout << "That's already the first level\n";
     }
@@ -610,7 +555,7 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
   if(controller.rightArrow.transitionCount && controller.rightArrow.endedDown) {
     gameState->active_level += 1;
     //cout << "LOADING LEVEL: " << active_level << endl;
-    loadLevel(gameState, levelInfo, state, gameState->active_level);
+    loadLevel(gameState, levelInfo, state, tempMemory, gameState->active_level);
   }
   
   
@@ -627,7 +572,7 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
 
 
   // Animation basis
-  if(state->sleep_active && input.currentTime >= sleepStartTime + SLEEP_DURATION) {
+  if(state->sleep_active && input.currentTime >= state->sleepStartTime + SLEEP_DURATION) {
     state->sleep_active = false;
     reflect_along(state, state->mirrorFragmentAnchor, state->mirrorFragmentAngle);
 
@@ -655,13 +600,13 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
   
   
   //Floor tiles
-  for(int i=0; i<tiles.size(); i++) {
+  for(int i=0; i<levelInfo->activeTiles; i++) {
     mat4 model = identity4;
-    model.xw = (float) tiles[i].xid;
-    model.yw = (float) tiles[i].yid;
+    model.xw = (float) levelInfo->tiles[i].xid;
+    model.yw = (float) levelInfo->tiles[i].yid;
 
     *renderMemory = renderObject {FLOOR_TILE, model, viewResult.view};
-    if(tiles[i].type == 2) {
+    if(levelInfo->tiles[i].type == 2) {
       renderMemory->highlight_key = 1;
     } else {
       renderMemory->highlight_key = 0;
@@ -670,12 +615,23 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
   }
 
 
-  //Player  
-  mat4 model = identity4;
-  model.xw = (float) levelInfo->player_pos_original.x;
-  model.yw = (float) levelInfo->player_pos_original.y;
-  *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
-  renderMemory++;
+  //Player
+  {
+    mat4 model = identity4;
+    model.xw = (float) levelInfo->player_pos_original.x;
+    model.yw = (float) levelInfo->player_pos_original.y;
+    *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
+    renderMemory++;
+  }
+
+  //Second player
+  if(levelInfo->hasSecondPlayer) {
+    mat4 model = identity4;
+    model.xw = (float) levelInfo->secondPlayerStartPos.x;
+    model.yw = (float) levelInfo->secondPlayerStartPos.y;
+    *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
+    renderMemory++; 
+  }
 
 
   //Anchors

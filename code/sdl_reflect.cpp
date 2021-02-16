@@ -1,8 +1,7 @@
-//TODO: find memory leak
 
+#define SDL_MAIN_HANDLED
 #include "SDL/SDL.h"
 #include <glad/gl.h>
-
 
 typedef uint8_t uint8;
 typedef uint16_t uint16;
@@ -31,11 +30,13 @@ typedef double real64;
 #include <fstream>
 #include <sstream>
 
+#include <windows.h>
+
 
 #define global static
 
-#define PERMANENT_STORAGE_SIZE (2 * 1024)
-#define TEMPORARY_STORAGE_SIZE (2 * 1024)
+#define PERMANENT_STORAGE_SIZE (5 * 1024)
+#define TEMPORARY_STORAGE_SIZE (1 * 1024 * 1024)
 
 const int amplitude = 0;//10000;
 const int sampleRate = 48000;
@@ -54,61 +55,71 @@ void loadLevelFromFile(int levelNum, LoadedLevel *data) {
 
   SDL_memset(data, 0, sizeof(LoadedLevel));
 
-  std::fstream file;
-  file.open("levels", std::ios::in);
-
-  if(!file || !file.is_open()) {
-    std::cout << "Error: file not opened successfully\n";    
-    return;
-  }
-
-  int readingBlock = 0;
-  bool onNumBlock = false;
+  if(std::ifstream levelFile{"levels"}) {
+    
+    int readingBlock = 0;
+    bool onNumBlock = false;
   
-  char lastChar = 'Q';
-  char c;  
-  while(file.get(c)) {
-    if(c=='0' || c=='1' || c=='2' || c=='3') {
-      onNumBlock = true;
+    char lastChar = 'Q';
+    char c;  
+    while(levelFile.get(c)) {
+      if(c=='0' || c=='1' || c=='2' || c=='3') {
+	onNumBlock = true;
 
-      if(readingBlock == 2*levelNum) {
-	//Maximum board space: 512
-	assert(data->tileDataCount < 512);
-	data->tileData[data->tileDataCount] = c;
-	data->tileDataCount++;
-      } else if(readingBlock == 2*levelNum + 1) {
-	//Maximum board space: 512
-	assert(data->pointDataCount < 512);
-	data->pointData[data->pointDataCount] = c;
-	data->pointDataCount++;
-      }
+	if(readingBlock == 2*levelNum) {
+	  //Maximum board space: 256
+	  assert(data->tileDataCount < 256);
+	  data->tileData[data->tileDataCount] = c;
+	  data->tileDataCount++;
+	} else if(readingBlock == 2*levelNum + 1) {
+	  //Maximum board space: 256
+	  assert(data->pointDataCount < 256);
+	  data->pointData[data->pointDataCount] = c;
+	  data->pointDataCount++;
+	}
       
-    } else if(c=='\n' && lastChar=='\n') {
+      } else if(c=='\n' && lastChar=='\n') {
 	//new paragraph
 	if(onNumBlock) {
 	  readingBlock += 1;
 	}
 	onNumBlock = false;
 	
-    } else if(c=='\n' && onNumBlock) {
-      //just single line break, continue as normal
+      } else if(c=='\n' && onNumBlock) {
+	//just single line break, continue as normal
 
 
-      if(readingBlock == 2*levelNum) {
-	//Maximum board space: 512
-	assert(data->tileDataCount < 512);
-	data->tileData[data->tileDataCount] = c;
-	data->tileDataCount++;
-      } else if(readingBlock == 2*levelNum + 1) {
-	//Maximum board space: 512
-	assert(data->pointDataCount < 512);
-	data->pointData[data->pointDataCount] = c;
-	data->pointDataCount++;
-      }
+	if(readingBlock == 2*levelNum) {
+	  //Maximum board space: 256
+	  assert(data->tileDataCount < 256);
+	  data->tileData[data->tileDataCount] = c;
+	  data->tileDataCount++;
+	} else if(readingBlock == 2*levelNum + 1) {
+	  //Maximum board space: 256
+	  assert(data->pointDataCount < 256);
+	  data->pointData[data->pointDataCount] = c;
+	  data->pointDataCount++;
+	}
            
+      }
+
+      lastChar = c;
+    }
+    if(levelFile.bad()) {
+      perror("error while reading file");
     }
 
-    lastChar = c;
+    try {
+      levelFile.close();
+    } catch(...) {
+      //      std::cerr << ": " << strerror(errno);
+    }
+
+
+  } else {
+    //TODO: logging, failed to open file
+    //    std::cerr << "Error: " << strerror(errno);
+
   }
 
 }
@@ -225,11 +236,18 @@ void updateRenderContextVertices(RenderContext context, float *vertices, int ver
 
 
 
-//TODO: figure out how this program starts. Why do we need wmain?
-int wmain(int argc, char* args[])
-{
 
-  if(SDL_Init( SDL_INIT_EVERYTHING ) == 0) {
+int CALLBACK  WinMain(
+		      HINSTANCE Instance,
+		      HINSTANCE PrevInstance,
+		      LPSTR     CommandLine,
+		      int       ShowCode )
+{
+  
+  if(SDL_Init(SDL_INIT_VIDEO |
+	      SDL_INIT_AUDIO |
+	      SDL_INIT_TIMER |
+	      SDL_INIT_EVENTS) == 0) {
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
@@ -250,13 +268,12 @@ int wmain(int argc, char* args[])
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-
 	SDL_AudioSpec want;
 	SDL_AudioSpec have;
 	SDL_AudioDeviceID device;
 
 	//	int samplePos = 0;
-
+	
 	SDL_memset(&want, 0, sizeof(want)); /* or SDL_zero(want) */
 	want.freq = 48000;
 	want.format = AUDIO_S16SYS;
@@ -267,6 +284,7 @@ int wmain(int argc, char* args[])
 	//TODO: account for available sound card format
 	device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0); //SDL_AUDIO_ALLOW_FORMAT_CHANGE	
 
+	//Start playing audio
 	SDL_PauseAudioDevice(device, 0);	
 	
 	//Synchronize buffer swap with monitor's vertical refresh
@@ -392,11 +410,24 @@ int wmain(int argc, char* args[])
 	memory.isInitialized = false;
 	memory.permanentStorageSize = PERMANENT_STORAGE_SIZE;
 	memory.temporaryStorageSize = TEMPORARY_STORAGE_SIZE;
+
+	/*
 	memory.permanentStorage = malloc(PERMANENT_STORAGE_SIZE +
 					 TEMPORARY_STORAGE_SIZE);
 	memory.temporaryStorage = (void *)((char *) memory.permanentStorage +
 					   PERMANENT_STORAGE_SIZE);
-	SDL_memset(memory.permanentStorage, 0, 10 * 1024);
+	*/
+
+	memory.permanentStorage = malloc(PERMANENT_STORAGE_SIZE);
+	memory.temporaryStorage = malloc(TEMPORARY_STORAGE_SIZE);
+
+	SDL_memset(memory.permanentStorage, 0, memory.permanentStorageSize);
+	SDL_memset(memory.temporaryStorage, 0, memory.temporaryStorageSize);	
+
+	//Audio
+
+	int audioStreamMaxSize = (int)(sizeof(int16) * sampleRate * 0.5f); //enough for 1/2 second
+	int16 *stream = (int16 *)malloc(audioStreamMaxSize);
 
 	
 	uint64 timerFrequency = SDL_GetPerformanceFrequency();
@@ -409,6 +440,7 @@ int wmain(int argc, char* args[])
 	while(running) {
 
 	  SDL_memset(renderMemoryInfo.memory, 0, sizeof(renderObject) * renderMemoryInfo.count);
+	  SDL_memset(memory.temporaryStorage, 0, memory.temporaryStorageSize);
 
 	  controllerInput mainController = {};
 	  //mainController = {};
@@ -472,13 +504,19 @@ int wmain(int argc, char* args[])
 	  //std::cout << "Mouse x " << mainController.mouseX << "\n";
 	  //std::cout << "Mouse y " << mainController.mouseY << "\n";
 
-
 	  int bytesLeftInQueue = SDL_GetQueuedAudioSize(device);
 	  int samplesLeftInQueue = bytesLeftInQueue / 2;
 	  int samplesToAppend = 0;
 	  if(samplesLeftInQueue < samplesAheadTarget) {
 	    samplesToAppend = samplesAheadTarget - samplesLeftInQueue;
 	  }
+
+	  if(samplesToAppend > audioStreamMaxSize) {
+	    //TODO: logging: audio length necessary to be continuous is longer than buffer size
+	    samplesToAppend = audioStreamMaxSize;
+	  }
+	  
+
 
 	  gameInput input;
 	  input.screenWidth = screenWidth;
@@ -493,19 +531,19 @@ int wmain(int argc, char* args[])
 	  input.deltaTime = deltaTime;
 	  prevTime = timerCount;
 	  //std::cout << "Duraton: "<<deltaTime<< " ms\n";
-
 	  
 	  gameUpdateAndRender(input, &memory, &renderMemoryInfo);
 
-	  
-	  int16 *stream = new int16[samplesToAppend];
+
+	  assert(samplesToAppend <= audioStreamMaxSize);
+	  SDL_memset(stream, 0, audioStreamMaxSize);
 	  for(int i=0; i < samplesToAppend; ++i) {
 	    double time = ((double) samplePos) / ((double) sampleRate); // in seconds
 	    *(stream + i) = (int16) (amplitude * sin(2.0f * PI * 260.0f * time));
 	    
 	    samplePos++;			     
 	  }
-	  SDL_QueueAudio(device, (void *)stream, samplesToAppend * 2);
+	  SDL_QueueAudio(device, (void *)stream, samplesToAppend * sizeof(int16));
 
 	  
 	  glViewport(0, 0, 1280, 720);
@@ -544,6 +582,11 @@ int wmain(int argc, char* args[])
 
 	//SDL_GL_DeleteContext(glcontext);
 	SDL_CloseAudioDevice(device);
+
+	//free(renderMemoryRaw);
+
+
+	
 
 
       } else {

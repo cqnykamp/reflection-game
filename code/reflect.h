@@ -10,8 +10,8 @@
 
 
 struct LoadedLevel {
-  char tileData[512];
-  char pointData[512];
+  char tileData[256];
+  char pointData[256];
   int tileDataCount;
   int pointDataCount;
 };

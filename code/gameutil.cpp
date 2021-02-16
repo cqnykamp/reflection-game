@@ -102,6 +102,21 @@ struct imat3 {
   }
 };
 
+
+const mat3 identity3f = mat3 {
+  1.0f, 0.0f, 0.0f, 
+  0.0f, 1.0f, 0.0f, 
+  0.0f, 0.0f, 1.0f
+};
+const imat3 identity3i = imat3 {
+  1, 0, 0,
+  0, 1, 0,
+  0, 0, 1
+};
+
+
+
+
 mat3 operator*(float f, mat3 m) {
   return mat3 {
     f*m.xx, f*m.xy, f*m.xz,
@@ -197,7 +212,6 @@ imat3 transpose(imat3 m) {
 
 
 
-
 struct mat4 {
   float xx; float xy; float xz; float xw;
   float yx; float yy; float yz; float yw;
@@ -212,25 +226,6 @@ const mat4 identity4 = mat4 {
   0.0f, 0.0f, 1.0f, 0.0f,
   0.0f, 0.0f, 0.0f, 1.0f
 };
-
-
-/**
-mat3 mat3WithDiag(float f) {
-  mat3 m = {};
-  m.xx = f;
-  m.yy = f;
-  m.zz = f;
-  return m;
-}
-
-imat3 imat3WithDiag(int n) {
-  imat3 m = {};
-  m.xx = n;
-  m.yy = n;
-  m.zz = n;
-  return m;
-}
-**/
 
 
 
@@ -282,42 +277,6 @@ mat4 operator*(mat4 a, mat4 b) {
     
   };
 }
-
-
-
-
-
-
-/**
-void matrixVectorMultiplyInt(int m[], int v[], int result[], int vecSize) {
-  //NOTE: assumes matrix is row-major
-  for(int i=0; i < vecSize; i++) {
-    int sum = 0;
-    for(int j=0; j  < vecSize; j++) {
-      sum += m[i * vecSize + j] * v[j]; 
-    }
-    result[i] = sum;
-  } 
-}
-void matrixVectorMultiplyFloat(float m[], float v[], float result[], int vecSize) {
-  //NOTE: assumes matrix is row-major
-  for(int i=0; i < vecSize; i++) {
-    float sum = 0;
-    for(int j=0; j  < vecSize; j++) {
-      sum += m[i * vecSize + j] * v[j]; 
-    }
-    result[i] = sum;
-  }    
-}
-
-ivec3 operator*(imat3 m, ivec3 v) {
-  int m_array[] = {m.xx, m.xy, m.xz, m.yx, m.yy, m.yz, m.zx, m.zy, m.zz};
-  int v_array[] = {v.x, v.y, v.z};
-  int r_array[3];
-  matrixVectorMultiplyInt(m_array, v_array, r_array, 3);
-  return ivec3{r_array[0], r_array[1], r_array[2]};
-}
-  **/
 
 
 #define GAMEUTIL_CPP
