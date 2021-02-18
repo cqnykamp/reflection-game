@@ -5,8 +5,27 @@
 
 #include "gameutil.cpp"
 
+#define PI 3.1415926535897932384626433f
+
 #define assert(expression) \
   if(!(expression)) {*(int *)0 = 0;}
+
+typedef uint8_t uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+
+typedef int8_t int8;
+typedef int16_t int16;
+typedef int32_t int32;
+typedef int64_t int64;
+
+typedef int32 bool32;
+
+typedef float real32;
+typedef double real64;
+
+
 
 
 struct LoadedLevel {
@@ -15,6 +34,30 @@ struct LoadedLevel {
   int tileDataCount;
   int pointDataCount;
 };
+
+
+
+enum RenderContext {
+  //NOTE: 0 means nothing there, don't draw
+  PLAYER = 1,
+  BACKGROUND = 2,
+  FLOOR_TILE = 3,
+  FRONT_GRID = 4,
+  MIRROR = 5,
+  ANCHOR = 6,
+  //GOAL,
+};
+
+
+#define LOAD_LEVEL_FROM_FILE(name) void name(int levelNum, LoadedLevel *data)
+typedef LOAD_LEVEL_FROM_FILE(LoadLevelFromFile);
+
+#define UPDATE_RENDER_CONTEXT_VERTICES(name) void name (RenderContext context, float *vertices, int verticesLength)
+typedef UPDATE_RENDER_CONTEXT_VERTICES(UpdateRenderContextVertices);
+
+#define DEBUG_LOG(name) void name(char text[])
+typedef DEBUG_LOG(DebugLog);
+
 
 
 
@@ -43,17 +86,6 @@ struct gameInput {
 };
 
 
-enum RenderContext {
-  //NOTE: 0 means nothing there, don't draw
-  PLAYER = 1,
-  BACKGROUND = 2,
-  FLOOR_TILE = 3,
-  FRONT_GRID = 4,
-  MIRROR = 5,
-  ANCHOR = 6,
-  //GOAL,
-};
-
 
 struct renderObject {
   RenderContext renderContext;
@@ -61,6 +93,7 @@ struct renderObject {
   mat4 view;
   mat3 basis;
   int highlight_key;
+  float alpha;
 };
 
 
@@ -70,6 +103,11 @@ struct gameMemory {
   int temporaryStorageSize;
   void *permanentStorage;
   void *temporaryStorage;
+
+  LoadLevelFromFile *loadLevelFromFile;
+  UpdateRenderContextVertices *updateRenderContextVertices;
+  DebugLog *debugLog;
+
 };
 
 
@@ -78,9 +116,25 @@ struct RenderMemoryInfo {
   renderObject *memory;
 };
 
-void loadLevelFromFile(int levelNum, LoadedLevel *data);
 
-void updateRenderContextVertices(RenderContext context, float *vertices, int verticesLength);
+
+
+
+#define GAME_UPDATE_AND_RENDER(name) void name(gameInput input, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo)
+
+typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
+
+GAME_UPDATE_AND_RENDER(gameUpdateAndRenderStub) {
+  return;
+}
+
+
+
+
+struct PlatformCalls {
+  LoadLevelFromFile *loadLevelFromFile;
+  UpdateRenderContextVertices *updateRenderContextVertices;
+};
 
 
 #define REFLECT_H

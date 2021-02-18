@@ -1,7 +1,6 @@
 //TODO: use aliases for game state structs on some functions
 
 #include "reflect.h"
-
 #include "gameutil.cpp"
 
 #include <iostream>
@@ -68,6 +67,7 @@ struct LevelState {
   ivec2 mirrorFragmentAnchor;
 
   float weight;
+  float mirrorTimeElapsed;
   uint32 sleepStartTime;
   bool is_animation_active;
   bool sleep_active = false;
@@ -290,7 +290,9 @@ viewCalculations setScreenView(LevelInfo *levelInfo, int current_screen_width, i
 
 }
 
-void loadLevel(GameState *gameState, LevelInfo *levelInfo, LevelState *state, void *tempMemory, int level_num) {
+void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInfo, LevelState *state, void *tempMemory, int level_num) {
+
+  memoryInfo->debugLog("");
 
   for(int yid=0; yid<BOARD_HEIGHT; yid++) {
     for(int xid=0; xid<BOARD_WIDTH; xid++) {
@@ -311,7 +313,7 @@ void loadLevel(GameState *gameState, LevelInfo *levelInfo, LevelState *state, vo
   levelInfo->hasSecondPlayer = false;
 
   LoadedLevel *levelData = (LoadedLevel *) claimMemory(&tempMemory, sizeof(LoadedLevel));
-  loadLevelFromFile(level_num, levelData);
+  memoryInfo->loadLevelFromFile(level_num, levelData);
   
   int8 xid=0;
   int8 yid=0;
@@ -397,7 +399,7 @@ void loadLevel(GameState *gameState, LevelInfo *levelInfo, LevelState *state, vo
 
 
 
-void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 time) {
+void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, LevelState *state, uint32 time) {
 
   // Update game state
   state->basis = state->target_basis;
@@ -438,6 +440,7 @@ void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 ti
   int supporting_tile_id = -100;
 
   bool isSecondPlayerSupported = true;
+  int secondPlayerSupportingTile = -100;
 
   //TODO: should boundary still be considered BOARD_WIDTH(or height) - 1?
   if(player_lower_left.y < 0 || player_lower_left.y > BOARD_HEIGHT-1 || player_lower_left.x < 0 || player_lower_left.x > BOARD_WIDTH-1) {
@@ -476,7 +479,8 @@ void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 ti
 
 	if(!isSecondPlayerSupported && secondPlayerOnThisTile) {
 	  isSecondPlayerSupported = true;
-	  //TODO: supporting tile is goal?
+	  secondPlayerSupportingTile = i;
+
 	}
 
       }
@@ -490,23 +494,29 @@ void onPlayerMovementFinished(LevelInfo *levelInfo, LevelState *state, uint32 ti
     //Start sleep counter
     state->sleepStartTime = time;
     state->sleep_active = true;
-    
+
 
   } else {
     state->mirrorState = MIRROR_INACTIVE;
 
-    // Check if level complete  
-    if(levelInfo->tiles[supporting_tile_id].type == 2) {
-      std::cout << "LEVEL COMPLETE!\n";
+    // Check if level complete
+    if(levelInfo->hasSecondPlayer &&
+       levelInfo->tiles[supporting_tile_id].type == 2 &&
+       levelInfo->tiles[secondPlayerSupportingTile].type == 2) {
+      std::cout << "LEVEL COMPLETE!";
+      memoryInfo->debugLog("Level complete!");
+
+    } else if(!levelInfo->hasSecondPlayer &&
+	      levelInfo->tiles[supporting_tile_id].type == 2) {
+      std::cout << "LEVEL COMPLETE!";
+      memoryInfo->debugLog("Level Complete!");
     }
   }
 }
 
 
-
-
-void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo) {
-
+//void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo) {
+extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
   controllerInput controller = input.controllers[0];
@@ -533,7 +543,7 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
   void *tempMemory = memoryInfo->temporaryStorage;
   
   if(!memoryInfo->isInitialized) {
-    loadLevel(gameState, levelInfo, state, tempMemory, 0);
+    loadLevel(memoryInfo, gameState, levelInfo, state, tempMemory, 0);
     memoryInfo->isInitialized = true;
   }
   
@@ -541,13 +551,13 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
   if(controller.rKey.transitionCount && controller.rKey.endedDown) {
     //reset level
     std::cout << "RESETTING LEVEL: " << gameState->active_level << std::endl;
-    loadLevel(gameState, levelInfo, state, tempMemory, gameState->active_level);	
+    loadLevel(memoryInfo, gameState, levelInfo, state, tempMemory, gameState->active_level);	
   }
   if(controller.leftArrow.transitionCount && controller.leftArrow.endedDown) {
     if(gameState->active_level > 0) {
       //cout << "LOADING LEVEL: " << active_level << endl;
       gameState->active_level -= 1;
-      loadLevel(gameState, levelInfo, state, tempMemory, gameState->active_level);
+      loadLevel(memoryInfo, gameState, levelInfo, state, tempMemory, gameState->active_level);
     } else {
       //cout << "That's already the first level\n";
     }
@@ -555,7 +565,7 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
   if(controller.rightArrow.transitionCount && controller.rightArrow.endedDown) {
     gameState->active_level += 1;
     //cout << "LOADING LEVEL: " << active_level << endl;
-    loadLevel(gameState, levelInfo, state, tempMemory, gameState->active_level);
+    loadLevel(memoryInfo, gameState, levelInfo, state, tempMemory, gameState->active_level);
   }
   
   
@@ -577,14 +587,17 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
     reflect_along(state, state->mirrorFragmentAnchor, state->mirrorFragmentAngle);
 
   }
+
+  state->mirrorTimeElapsed += input.deltaTime;
+
+  
   mat3 animation_basis = state->target_basis;
   if(state->is_animation_active) {
     state->weight += 0.0025f * input.deltaTime;
 
     if(state->weight >= 1) {
       state->is_animation_active = false;
-      onPlayerMovementFinished(levelInfo, state, input.currentTime);
-	
+      onPlayerMovementFinished(memoryInfo, levelInfo, state, input.currentTime);	
     } else {
       //Lerp basis
       animation_basis  = state->basis * mat3() * (1.0f-state->weight)
@@ -766,6 +779,7 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
 	state->mirrorFragmentAnchor = nearestAnchor(levelInfo, mouse_coords);
 	state->mirrorFragmentAngle = RIGHT;
 	state->mirrorFragmentMag = 0;
+
 	/**printf("Nearest anchor is (%f, %f) to mouse coords (%f, %f)\n",
 	       mirrorFragmentAnchor.x,
 	       mirrorFragmentAnchor.y,
@@ -817,8 +831,9 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
             
       if(passesThroughAnchor) {
 	state->mirrorState = MIRROR_LOCKED;
+	state->mirrorTimeElapsed = 0.f;
 	reflect_along(state, state->mirrorFragmentAnchor, state->mirrorFragmentAngle);
-	
+       
       } else {
 	state->mirrorState = MIRROR_INACTIVE;
       }
@@ -828,17 +843,41 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
 
   
   if(state->mirrorState==MIRROR_DRAGGABLE || state->mirrorState==MIRROR_LOCKED) {
+    
+    float extensionMag;
+    float mirrorAlpha;
+    if(state->mirrorState==MIRROR_LOCKED) {
+      extensionMag = 0.00055f * pow(state->mirrorTimeElapsed, 1.3f);
+      mirrorAlpha = 1.0f - pow(state->mirrorTimeElapsed, 1.2f) / 1000.f;
+      /**
+      if(mirrorAlpha <= 0.3f) {
+	mirrorAlpha = 0.3f;
+      }
+      **/
+    } else {
+      extensionMag = 0.f;
+      mirrorAlpha = 1.f;
+    }
+
+    char tempLogBuffer[256];
+    sprintf_s(tempLogBuffer, "Mirror alpha: %f", mirrorAlpha); 
+    memoryInfo->debugLog(tempLogBuffer);
+    
+    float magSign = (state->mirrorFragmentMag > 0) ? 1.f : -1.f;    
+    vec2 mirrorExtension = extensionMag * magSign * toVec(state->mirrorFragmentAngle);
+
     vec2 diff = state->mirrorFragmentMag * toVec(state->mirrorFragmentAngle);
-      
+    
     float x1, y1, x2, y2;
     vec2 thickness_offset_dir;
-
     thickness_offset_dir = vec2(diff.y, -1 * diff.x);
     thickness_offset_dir = normalize(thickness_offset_dir);
-    x1 = (float) state->mirrorFragmentAnchor.x;
-    y1 = (float) state->mirrorFragmentAnchor.y;
-    x2 = x1 + diff.x;
-    y2 = y1 + diff.y;	
+
+    
+    x1 = (float) state->mirrorFragmentAnchor.x - mirrorExtension.x;
+    y1 = (float) state->mirrorFragmentAnchor.y - mirrorExtension.y;
+    x2 = x1 + diff.x + 1.5f * mirrorExtension.x;
+    y2 = y1 + diff.y + 1.5f * mirrorExtension.y;
     // printf("Mirror segment: (%i, %i) to (%i, %i) Thickness dir: (%f, %f)\n", x1, y1, x2, y2, thickness_offset_dir.x, thickness_offset_dir.y);
       
     float thickness = 0.05f;
@@ -862,8 +901,9 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
     mirror_vertices[11] = 0;    
 
 
-    updateRenderContextVertices(MIRROR, mirror_vertices, 12);
+    memoryInfo->updateRenderContextVertices(MIRROR, mirror_vertices, 12);
     *renderMemory = renderObject{MIRROR, identity4, viewResult.view};
+    renderMemory->alpha = mirrorAlpha;
     renderMemory++;
     
   }
@@ -883,3 +923,15 @@ void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryIn
   **/
 
 }
+
+
+//#if REFLECT_WIN32
+#include <windows.h>
+BOOL WINAPI DllMain(
+    HINSTANCE hinstDLL,  // handle to DLL module
+    DWORD fdwReason,     // reason for calling function
+    LPVOID lpReserved )  // reserved
+{
+  return TRUE;
+}
+//#endif
