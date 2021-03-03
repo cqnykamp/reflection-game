@@ -49,6 +49,7 @@ in vec2 uvRaw;
 //in vec3 pos;
 
 
+
 //uniform float tileLength;
 //uniform int level_width;
 //uniform int level_height;
@@ -74,22 +75,41 @@ void main() {
   }
   **/
 
+  //vec2 uv = fract(uvRaw);
+
+  float uvy = uvRaw.y / sqrt(0.75f);
+  
+  vec2 uvHexRaw = vec2(uvRaw.x + 0.5f * abs( mod(uvy - 1.f, 2.f) - 1.f),
+		    //		 uvRaw.y * sqrt(0.75f));
+		    uvy);
+
+  vec2 uvHex = fract(uvHexRaw);
+  /*
+    squareCoords.x + 0.5f * abs( fmod(squareCoords.y - 1.f, 2.f) - 1.f),
+    squareCoords.y * sqrt(0.75f)
+  */
+
   vec2 uv = fract(uvRaw);
+  //vec2 uv =  fract(uvRaw);
 
   float borderwidth = 0.05;
-  float not_border = (1.0-step(1.-borderwidth, uv.x))
-    * (1.0-step(1.-borderwidth, uv.y))
-    * (1.0-step(1.-borderwidth, 1.0-uv.x))
-    * (1.0-step(1.-borderwidth, 1.0-uv.y));
+
+  float not_border = (1.0-step(1.-borderwidth, uvHex.x))
+    * (1.0-step(1.-borderwidth, uvHex.y))
+    * (1.0-step(1.-borderwidth, 1.0-uvHex.x))
+    * (1.0-step(1.-borderwidth, 1.0-uvHex.y));
 
   float diagwidth = 0.05;
-  float not_diag = step(diagwidth, abs(uv.x-uv.y))
-    * step(diagwidth, abs(uv.x + uv.y - 1.));
+  float not_diag = step(diagwidth, abs(uvHex.x-uvHex.y))
+    * step(diagwidth, abs(uvHex.x + uvHex.y - 1.));
 
 
   if(not_border ==1. && not_diag==1.) {
     discard;
   }
+
+
+  
 
 
   /**
@@ -105,7 +125,7 @@ void main() {
 
   
   FragColor = vec4(1.f, 1.f, 1.f, 0.1f);
-  //  FragColor = vec4(pos.x, pos.y, 0., 1.);
+  //FragColor = vec4(uvHex.x, uvHex.y, 0., 0.4f);
 
   /**
   float corner = step(1.0-thickness, uv.x) * step(1.0-thickness, uv.y)

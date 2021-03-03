@@ -82,6 +82,15 @@ void * claimMemory(void **existingMemoryBuffer, int bytes) {
 }
 
 
+vec2 squareToHexGrid(vec2 squareCoords) {
+  float hexY = squareCoords.y; // * sqrt(0.75f);
+  return vec2 {
+    squareCoords.x + 0.5f * abs( fmod(hexY - 1.f, 2.f) - 1.f),
+    hexY * sqrt(0.75f)
+  };
+}
+
+
 //
 // Game-specific helper functions
 // 
@@ -544,11 +553,19 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject) {
        NewRenderObject floorObj = createNewRenderObject(floor_vertices, 12, floor_indices, 6, "shaders/floorTile.shader");
     **/
 
+    /*
     float floor_vertices[] = {
-      0.f, 0.f, 0.f, //left      
-      1.0f, 0, 0.f, //right
-      0.5f, 1.5f / sqrt(3.f), 0.f //bottom
+      -0.5f, 0.5f / sqrt(3.f), 0.f, //left
+      0.5f, 0.5f / sqrt(3.f), 0.f, //right
+      0.0f, 1.0f / sqrt(3.f), 0.f //bottom
     };
+    */
+    float floor_vertices[] = {
+      0.0f, 0.0f, 0.0f,
+      1.0f, 0.0f, 0.0f,
+      0.5f, 1.0f, 0.0f
+    };
+    
     unsigned int floor_indices[] = {
       0, 1, 2
     };
@@ -556,6 +573,7 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject) {
     createNewRenderObject(floor_vertices, 9, floor_indices, 3,
 			  "shaders/floorTile.shader", FLOOR_TILE);
 
+    /**
     float player_vertices[] = {
       0.15f, 0.15f, 0.0f,
       0.85f, 0.15f, 0.0f,
@@ -567,6 +585,22 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject) {
       2, 3, 0
     };
     createNewRenderObject(player_vertices, 12, player_indices, 6,
+			  "shaders/player.shader", PLAYER);
+    **/
+
+    float pad = 0.15f;
+
+    //TODO: fixme pad
+    float player_vertices[] = {
+      0.f + pad, 0.f + pad, 0.f, //left
+      1.0f - pad, 0.f + pad, 0.f, //right
+      0.5f, 1.5f / sqrt(3.f) - pad, 0.f //bottom      
+    };
+    unsigned int player_indices[] = {
+      0, 1, 2
+    };
+
+    createNewRenderObject(player_vertices, 9, player_indices, 3,
 			  "shaders/player.shader", PLAYER);
 
     float anchor_vertices[] = {
@@ -603,8 +637,7 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject) {
       0, 1, 2,
       2, 3, 0
     };
-    createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6, "shaders/frontGrid.shader", FRONT_GRID);  
-  
+    createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6, "shaders/frontGrid.shader", FRONT_GRID);
 }
 
 
@@ -643,7 +676,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   }
 
   if(memoryInfo->isDllFirstFrame) {
-    //std::cout << "Dll just loaded!\n";
+    std::cout << "=== Game Code reloaded ===\n";
     memoryInfo->isDllFirstFrame = false;
 
     loadRenderObjects(memoryInfo->createNewRenderObject);
@@ -716,14 +749,28 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   
   //Floor tiles
   for(int i=0; i<levelInfo->activeTiles; i++) {
+
+
+    vec2 hexCoords = squareToHexGrid(vec2 {
+	(float)levelInfo->tiles[i].xid,
+	(float)levelInfo->tiles[i].yid });
+
+    
     mat4 model = identity4;
+
+    model.xw = hexCoords.x;
+    model.yw = hexCoords.y;
+
+    /*
     model.xw = (float) levelInfo->tiles[i].xid;
     model.yw = (float) levelInfo->tiles[i].yid;
 
-    if(levelInfo->tiles[i].yid % 2 == 1) {
-      model.yy = -1 * model.yy;
+    model.yw *= sqrt(0.75f);
+    if(levelInfo->tiles[i].yid % 2 == 0) {
+      //model.yy = -1 * model.yy;
       model.xw = model.xw + 0.5f;
     }
+    */
 
     *renderMemory = renderObject {FLOOR_TILE, model, viewResult.view};
     if(levelInfo->tiles[i].type == 2) {
@@ -799,12 +846,20 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	}
 	  
 	mat4 anchorModel = identity4;
+
+	vec2 hexCoords = squareToHexGrid(vec2{(float)xid, (float)yid});
+	anchorModel.xw = hexCoords.x;
+	anchorModel.yw = hexCoords.y;
+
+	/*
 	anchorModel.xw = (float)xid;
 	anchorModel.yw = (float)yid;
 
-	if(yid % 2 == 1) {
+	anchorModel.yw *= sqrt(0.75f);
+	if(yid % 2 == 0) {
 	  anchorModel.xw += 0.5f;
 	}
+	*/
 
 	*renderMemory = renderObject{ANCHOR, anchorModel, viewResult.view};
 	renderMemory->highlight_key = highlight_key;
@@ -974,7 +1029,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     sprintf_s(tempLogBuffer, "Mirror alpha: %f", mirrorAlpha); 
     memoryInfo->debugLog(tempLogBuffer);
     
-    float magSign = (state->mirrorFragmentMag > 0) ? 1.f : -1.f;    
+    float magSign = (state->mirrorFragmentMag > 0) ? 1.f : -1.f;
     vec2 mirrorExtension = extensionMag * magSign * toVec(state->mirrorFragmentAngle);
 
     vec2 diff = state->mirrorFragmentMag * toVec(state->mirrorFragmentAngle);
