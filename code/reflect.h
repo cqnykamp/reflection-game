@@ -66,6 +66,9 @@ typedef UPDATE_RENDER_CONTEXT_VERTICES(UpdateRenderContextVertices);
 #define DEBUG_LOG(name) void name(char text[])
 typedef DEBUG_LOG(DebugLog);
 
+#define CREATE_NEW_RENDER_OBJECT(name) void name(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath, RenderContext context)
+typedef CREATE_NEW_RENDER_OBJECT(CreateNewRenderObject);
+
 
 
 
@@ -105,6 +108,8 @@ struct renderObject {
 
 struct gameMemory {
   bool isInitialized;
+  bool isDllFirstFrame;
+  
   int permanentStorageSize;
   int temporaryStorageSize;
   void *permanentStorage;
@@ -113,6 +118,7 @@ struct gameMemory {
   LoadLevelFromFile *loadLevelFromFile;
   UpdateRenderContextVertices *updateRenderContextVertices;
   DebugLog *debugLog;
+  CreateNewRenderObject *createNewRenderObject;
 
 };
 
@@ -137,11 +143,13 @@ GAME_UPDATE_AND_RENDER(gameUpdateAndRenderStub) {
 
 
 
+/**
 struct PlatformCalls {
   LoadLevelFromFile *loadLevelFromFile;
   UpdateRenderContextVertices *updateRenderContextVertices;
+  CreateNewRenderObject *CreateNewRenderObject;
 };
-
+**/
 
 #define REFLECT_H
 #endif

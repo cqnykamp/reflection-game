@@ -30,11 +30,13 @@ int screenWidth = 1280;
 int screenHeight = 720;
 
 int activeRenderTypes = 0;
-unsigned int vao[10];
-unsigned int vbo[10];
-unsigned int ebo[10];
-unsigned int shader[10];
-unsigned int indicesCount[10];
+//TODO: make sure MAX_RENDER_TYPES is big enough for RenderContext enum
+#define MAX_RENDER_TYPES 10
+unsigned int vao[MAX_RENDER_TYPES];
+unsigned int vbo[MAX_RENDER_TYPES];
+unsigned int ebo[MAX_RENDER_TYPES];
+unsigned int shader[MAX_RENDER_TYPES];
+unsigned int indicesCount[MAX_RENDER_TYPES];
 
 
 unsigned int fontShader;
@@ -166,19 +168,23 @@ struct NewRenderObject {
   unsigned int indicesCount;
 };
 
-NewRenderObject createNewRenderObject(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath) {
 
+CREATE_NEW_RENDER_OBJECT(createNewRenderObject) {
+
+  //TODO: this doesn't work bc active types aren't neccessarily sequential in the list; just clear all of them instead?
   activeRenderTypes++;
 
-  NewRenderObject obj = {};
+  unsigned int thisVao;
+  unsigned int thisVbo;
+  unsigned int thisEbo;
 
-  glGenVertexArrays(1, &(obj.vao));
-  glGenBuffers(1, &(obj.vbo));
-  glGenBuffers(1, &(obj.ebo));
+  glGenVertexArrays(1, &(thisVao));
+  glGenBuffers(1, &(thisVbo));
+  glGenBuffers(1, &(thisEbo));
 
-  glBindVertexArray(obj.vao);
-  glBindBuffer(GL_ARRAY_BUFFER, obj.vbo);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.ebo);
+  glBindVertexArray(thisVao);
+  glBindBuffer(GL_ARRAY_BUFFER, thisVbo);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, thisEbo);
 
   glBufferData(GL_ARRAY_BUFFER, sizeof(float) * verticesLength, vertices, GL_STATIC_DRAW);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indicesLength, indices, GL_STATIC_DRAW);
@@ -186,10 +192,12 @@ NewRenderObject createNewRenderObject(float vertices[], int verticesLength, unsi
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float),(void*) 0);
   glEnableVertexAttribArray(0);
 
-  obj.shader = loadShaderFromFile(filePath);
-  obj.indicesCount = indicesLength;
+  vao[context] = thisVao;
+  vbo[context] = thisVbo;
+  ebo[context] = thisEbo;
+  shader[context] = loadShaderFromFile(filePath);
+  indicesCount[context] = indicesLength;
 
-  return obj;
 }
 
 
@@ -210,118 +218,12 @@ inline FILETIME getLastWriteTime(char *filename) {
 
 }
 
-
 GameCode loadGameCode(char *sourceDLLName, char *tempDLLName) {
 
-	float background_vertices[] = {
-	  -50.0f, -50.0f, 0.0f, 
-	  -50.0f, 50.0f, 0.0f,  
-	  50.0f, 50.0f, 0.0f,   
-	  50.0f, -50.0f, 0.0f,  
-	};
-	unsigned int background_indices[] = {
-	  0, 1, 2,
-	  2, 3, 0
-	};
-	NewRenderObject bgObj = createNewRenderObject(background_vertices, 12, background_indices, 6, "shaders/background.shader");
-	vao[BACKGROUND] = bgObj.vao;
-	vbo[BACKGROUND] = bgObj.vbo;
-	ebo[BACKGROUND] = bgObj.ebo;
-	shader[BACKGROUND] = bgObj.shader;
-	indicesCount[BACKGROUND] = bgObj.indicesCount;
-	
-	float floor_vertices[] = {
-	  0.0f, 0.0f, 0.0f,
-	  1.0f, 0.0f, 0.0f,
-	  1.0f, 1.0f, 0.0f,
-	  0.0f, 1.0f, 0.0f
-	};  
-	unsigned int floor_indices[] = {
-	  0, 1, 2,
-	  2, 3, 0
-	};
 
-	NewRenderObject floorObj = createNewRenderObject(floor_vertices, 12, floor_indices, 6, "shaders/floorTile.shader");
-	vao[FLOOR_TILE] = floorObj.vao;
-	vbo[FLOOR_TILE] = floorObj.vbo;
-	ebo[FLOOR_TILE] = floorObj.ebo;
-	shader[FLOOR_TILE] = floorObj.shader;
-	indicesCount[FLOOR_TILE] = floorObj.indicesCount;
 
-	float player_vertices[] = {
-	  0.15f, 0.15f, 0.0f,
-	  0.85f, 0.15f, 0.0f,
-	  0.85f, 0.85f, 0.0f,
-	  0.15f, 0.85f, 0.0f,
-	};
-	unsigned int player_indices[] = {
-	  0, 1, 2,
-	  2, 3, 0
-	};
-	NewRenderObject playerObj = createNewRenderObject(player_vertices, 12, player_indices, 6, "shaders/player.shader");
-	vao[PLAYER] = playerObj.vao;
-	vbo[PLAYER] = playerObj.vbo;
-	ebo[PLAYER] = playerObj.ebo;
-	shader[PLAYER] = playerObj.shader;
-	indicesCount[PLAYER] = playerObj.indicesCount;
-
-	float anchor_vertices[] = {
-	  -1.0f, -1.0f, 0.0f,
-	  -1.0f, 1.0f, 0.0f,
-	  1.0f, 1.0f, 0.0f,
-	  1.0f, -1.0f, 0.0f,
-	};
-	unsigned int anchor_indices[] = {
-	  0, 1, 2,
-	  2, 3, 0
-	};
-	NewRenderObject anchorObj = createNewRenderObject(anchor_vertices, 12, anchor_indices, 6, "shaders/anchor.shader");
-	vao[ANCHOR] = anchorObj.vao;
-	vbo[ANCHOR] = anchorObj.vbo;
-	ebo[ANCHOR] = anchorObj.ebo;
-	shader[ANCHOR] = anchorObj.shader;
-	indicesCount[ANCHOR] = anchorObj.indicesCount;	
 
 	
-	float mirror_vertices[] = {
-	  0.0f, 0.0f, 0.0f,
-	  0.0f, 1.0f, 0.0f,
-	  1.0f, 1.0f, 0.0f,
-	  1.0f, 0.0f, 0.0f,
-	};
-	unsigned int mirror_indices[] = {
-	  0, 1, 2,
-	  2, 3, 0
-	};
-	NewRenderObject mirrorObj = createNewRenderObject(mirror_vertices, 12, mirror_indices, 6, "shaders/mirror.shader");
-	vao[MIRROR] = mirrorObj.vao;
-	vbo[MIRROR] = mirrorObj.vbo;
-	ebo[MIRROR] = mirrorObj.ebo;
-	shader[MIRROR] = mirrorObj.shader;
-	indicesCount[MIRROR] = mirrorObj.indicesCount;
-
-	float front_grid_vertices[] = {
-	  -50.f, -50.f, 0.0f,
-	  -50.f, 50.0f, 0.0f,
-	  50.0f, 50.0f, 0.0f,
-	  50.0f, -50.0f, 0.0f
-	};
-	unsigned int front_grid_indices[] = {
-	  0, 1, 2,
-	  2, 3, 0
-	};
-	NewRenderObject frontGridObj = createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6, "shaders/frontGrid.shader");
-	vao[FRONT_GRID] = frontGridObj.vao;
-	vbo[FRONT_GRID] = frontGridObj.vbo;
-	ebo[FRONT_GRID] = frontGridObj.ebo;
-	shader[FRONT_GRID] = frontGridObj.shader;
-	indicesCount[FRONT_GRID] = frontGridObj.indicesCount;
-
-
-
-
-  
-
   GameCode gameCode = {};
 
   gameCode.dllLastWriteTime = getLastWriteTime(sourceDLLName);
@@ -347,9 +249,9 @@ GameCode loadGameCode(char *sourceDLLName, char *tempDLLName) {
 
 void unloadGameCode(GameCode *gameCode) {
 
-  glDeleteVertexArrays(activeRenderTypes, vao);
-  glDeleteBuffers(activeRenderTypes, vbo);
-  glDeleteBuffers(activeRenderTypes, ebo);
+  glDeleteVertexArrays(MAX_RENDER_TYPES, vao);
+  glDeleteBuffers(MAX_RENDER_TYPES, vbo);
+  glDeleteBuffers(MAX_RENDER_TYPES, ebo);
   activeRenderTypes = 0;
   
   if(gameCode->gameHandle) {
@@ -671,6 +573,7 @@ int CALLBACK  WinMain(
 	//Game Memory
 	gameMemory memory = {};
 	memory.isInitialized = false;
+	memory.isDllFirstFrame = true;
 	memory.permanentStorageSize = PERMANENT_STORAGE_SIZE;
 	memory.temporaryStorageSize = TEMPORARY_STORAGE_SIZE;
 
@@ -678,6 +581,7 @@ int CALLBACK  WinMain(
 	memory.loadLevelFromFile = loadLevelFromFile;
 	memory.updateRenderContextVertices = updateRenderContextVertices;
 	memory.debugLog = debugLog;
+	memory.createNewRenderObject = createNewRenderObject;
 
 
 	LPVOID baseAddress = 0;
@@ -793,6 +697,7 @@ int CALLBACK  WinMain(
 	bool running = true;
 	int counter = 0;
 
+	memory.isDllFirstFrame = true;
 	GameCode gameCode = loadGameCode(sourceGameCodeDLLFullPath,
 					 tempGameCodeDLLFullPath);
 
@@ -808,7 +713,8 @@ int CALLBACK  WinMain(
 
 	    if(CompareFileTime(&newDllWriteTime, &gameCode.dllLastWriteTime) != 0) {
 	      //gameCode.dllLastWriteTime = newDllWriteTime;
-	      
+
+	      memory.isDllFirstFrame = true;
 	      unloadGameCode(&gameCode);
 	      gameCode = loadGameCode(sourceGameCodeDLLFullPath,
 				      tempGameCodeDLLFullPath);
@@ -896,9 +802,11 @@ int CALLBACK  WinMain(
 
 		if(event.key.keysym.scancode==SDL_SCANCODE_Q) {
 		  #ifdef REFLECT_INTERNAL
-		  
+
+		  memory.isDllFirstFrame = true;
 		  unloadGameCode(&gameCode);
 		  gameCode = loadGameCode(sourceGameCodeDLLFullPath, tempGameCodeDLLFullPath);
+		  
 		  #endif
 		}
 	      } break;

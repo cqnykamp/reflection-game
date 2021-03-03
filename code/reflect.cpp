@@ -292,6 +292,8 @@ viewCalculations setScreenView(LevelInfo *levelInfo, int current_screen_width, i
 
 void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInfo, LevelState *state, void *tempMemory, int level_num) {
 
+  unsigned int bufferid;
+
   memoryInfo->debugLog("");
 
   for(int yid=0; yid<BOARD_HEIGHT; yid++) {
@@ -515,6 +517,97 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
 }
 
 
+void loadRenderObjects(CreateNewRenderObject *createNewRenderObject) {
+    float background_vertices[] = {
+      -50.0f, -50.0f, 0.0f, 
+      -50.0f, 50.0f, 0.0f,  
+      50.0f, 50.0f, 0.0f,   
+      50.0f, -50.0f, 0.0f,  
+    };
+    unsigned int background_indices[] = {
+      0, 1, 2,
+      2, 3, 0
+    };
+    createNewRenderObject(background_vertices, 12, background_indices, 6, "shaders/background.shader", BACKGROUND);
+    
+    /**
+       float floor_vertices[] = {
+       0.0f, 0.0f, 0.0f,
+       1.0f, 0.0f, 0.0f,
+       1.0f, 1.0f, 0.0f,
+       0.0f, 1.0f, 0.0f
+       };  
+       unsigned int floor_indices[] = {
+       0, 1, 2,
+       2, 3, 0
+       };
+       NewRenderObject floorObj = createNewRenderObject(floor_vertices, 12, floor_indices, 6, "shaders/floorTile.shader");
+    **/
+
+    float floor_vertices[] = {
+      0.f, 0.f, 0.f, //left      
+      1.0f, 0, 0.f, //right
+      0.5f, 1.5f / sqrt(3.f), 0.f //bottom
+    };
+    unsigned int floor_indices[] = {
+      0, 1, 2
+    };
+	
+    createNewRenderObject(floor_vertices, 9, floor_indices, 3,
+			  "shaders/floorTile.shader", FLOOR_TILE);
+
+    float player_vertices[] = {
+      0.15f, 0.15f, 0.0f,
+      0.85f, 0.15f, 0.0f,
+      0.85f, 0.85f, 0.0f,
+      0.15f, 0.85f, 0.0f,
+    };
+    unsigned int player_indices[] = {
+      0, 1, 2,
+      2, 3, 0
+    };
+    createNewRenderObject(player_vertices, 12, player_indices, 6,
+			  "shaders/player.shader", PLAYER);
+
+    float anchor_vertices[] = {
+      -1.0f, -1.0f, 0.0f,
+      -1.0f, 1.0f, 0.0f,
+      1.0f, 1.0f, 0.0f,
+      1.0f, -1.0f, 0.0f,
+    };
+    unsigned int anchor_indices[] = {
+      0, 1, 2,
+      2, 3, 0
+    };
+    createNewRenderObject(anchor_vertices, 12, anchor_indices, 6, "shaders/anchor.shader", ANCHOR);
+	
+    float mirror_vertices[] = {
+      0.0f, 0.0f, 0.0f,
+      0.0f, 1.0f, 0.0f,
+      1.0f, 1.0f, 0.0f,
+      1.0f, 0.0f, 0.0f,
+    };
+    unsigned int mirror_indices[] = {
+      0, 1, 2,
+      2, 3, 0
+    };
+    createNewRenderObject(mirror_vertices, 12, mirror_indices, 6, "shaders/mirror.shader", MIRROR);
+
+    float front_grid_vertices[] = {
+      -50.f, -50.f, 0.0f,
+      -50.f, 50.0f, 0.0f,
+      50.0f, 50.0f, 0.0f,
+      50.0f, -50.0f, 0.0f
+    };
+    unsigned int front_grid_indices[] = {
+      0, 1, 2,
+      2, 3, 0
+    };
+    createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6, "shaders/frontGrid.shader", FRONT_GRID);  
+  
+}
+
+
 //void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo) {
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
@@ -547,6 +640,13 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   if(!memoryInfo->isInitialized) {
     loadLevel(memoryInfo, gameState, levelInfo, state, tempMemory, 0);
     memoryInfo->isInitialized = true;
+  }
+
+  if(memoryInfo->isDllFirstFrame) {
+    //std::cout << "Dll just loaded!\n";
+    memoryInfo->isDllFirstFrame = false;
+
+    loadRenderObjects(memoryInfo->createNewRenderObject);
   }
   
   
@@ -619,6 +719,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     mat4 model = identity4;
     model.xw = (float) levelInfo->tiles[i].xid;
     model.yw = (float) levelInfo->tiles[i].yid;
+
+    if(levelInfo->tiles[i].yid % 2 == 1) {
+      model.yy = -1 * model.yy;
+      model.xw = model.xw + 0.5f;
+    }
 
     *renderMemory = renderObject {FLOOR_TILE, model, viewResult.view};
     if(levelInfo->tiles[i].type == 2) {
@@ -696,6 +801,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	mat4 anchorModel = identity4;
 	anchorModel.xw = (float)xid;
 	anchorModel.yw = (float)yid;
+
+	if(yid % 2 == 1) {
+	  anchorModel.xw += 0.5f;
+	}
 
 	*renderMemory = renderObject{ANCHOR, anchorModel, viewResult.view};
 	renderMemory->highlight_key = highlight_key;
