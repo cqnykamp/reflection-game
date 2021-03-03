@@ -1,16 +1,17 @@
+//TODO: figure out why startup is laggy aka >17ms per frame
+//TODO: better logging system?
 
 //#define SDL_MAIN_HANDLED
 #include "SDL/SDL.h"
 #include <glad/gl.h>
 
-
 #include "reflect.h"
 
 //TODO: don't include this
 #include <iostream>
-#include <string>
 #include <fstream>
 #include <sstream>
+#include <cstring>
 
 #include <windows.h>
 #include <ft2build.h>
@@ -22,15 +23,13 @@
 #define TEMPORARY_STORAGE_SIZE (1 * 1024 * 1024)
 
 
-
-
-
 const int amplitude = 0;//10000;
 const int sampleRate = 48000;
 
 int screenWidth = 1280;
 int screenHeight = 720;
 
+int activeRenderTypes = 0;
 unsigned int vao[10];
 unsigned int vbo[10];
 unsigned int ebo[10];
@@ -51,125 +50,42 @@ struct Character {
 
 Character characters[128];
 
-char logText[4096];
+#define MAX_LOG_TEXT 4096
+char logText[MAX_LOG_TEXT];
+int usedChars = 0;
 
 int frameDurationLabel;
 uint32 lastLabelTimestamp = 0;
 
-
 struct GameCode {
   HMODULE gameHandle;
+  FILETIME dllLastWriteTime;
   GameUpdateAndRender *gameUpdateAndRender;
   bool isValid;
 };
 
-GameCode loadGameCode() {
-
-  GameCode gameCode = {};
-
-  //CopyFile("reflect.dll", "reflect_temp.dll");
-  gameCode.gameHandle = LoadLibrary("reflect.dll");
-  if(gameCode.gameHandle) {
-    gameCode.gameUpdateAndRender = (GameUpdateAndRender *)
-      GetProcAddress(gameCode.gameHandle, "gameUpdateAndRender");
-    
-    gameCode.isValid = (gameCode.gameUpdateAndRender);
-  }
-
-  if(!gameCode.isValid) {
-    gameCode.gameUpdateAndRender = gameUpdateAndRenderStub;
-  }
-
-  return gameCode;
-
-}
-
-void unloadGameCode(GameCode *gameCode) {
-  if(gameCode->gameHandle) {
-    FreeLibrary(gameCode->gameHandle);
-  }
-  gameCode->isValid = false;
-  gameCode->gameUpdateAndRender = gameUpdateAndRenderStub;
+struct LoopedCodeData {
+  void *gameMemoryBlock;
+  int gameMemoryBlockSize;
+  HANDLE recordingFileHandle;
+  HANDLE playbackFileHandle;
+  bool isRecording;
+  bool isPlayingBack;
   
-}
-	
+};
 
 
 
-
-
-LOAD_LEVEL_FROM_FILE(loadLevelFromFile) {
-
-  SDL_memset(data, 0, sizeof(LoadedLevel));
-
-  if(std::ifstream levelFile{"levels"}) {
+void log(const char *message) {
+  for(int i=0; i<strlen(message); i++ ) {
     
-    int readingBlock = 0;
-    bool onNumBlock = false;
-  
-    char lastChar = 'Q';
-    char c;  
-    while(levelFile.get(c)) {
-      if(c=='0' || c=='1' || c=='2' || c=='3') {
-	onNumBlock = true;
-
-	if(readingBlock == 2*levelNum) {
-	  //Maximum board space: 256
-	  assert(data->tileDataCount < 256);
-	  data->tileData[data->tileDataCount] = c;
-	  data->tileDataCount++;
-	} else if(readingBlock == 2*levelNum + 1) {
-	  //Maximum board space: 256
-	  assert(data->pointDataCount < 256);
-	  data->pointData[data->pointDataCount] = c;
-	  data->pointDataCount++;
-	}
-      
-      } else if(c=='\n' && lastChar=='\n') {
-	//new paragraph
-	if(onNumBlock) {
-	  readingBlock += 1;
-	}
-	onNumBlock = false;
-	
-      } else if(c=='\n' && onNumBlock) {
-	//just single line break, continue as normal
-
-
-	if(readingBlock == 2*levelNum) {
-	  //Maximum board space: 256
-	  assert(data->tileDataCount < 256);
-	  data->tileData[data->tileDataCount] = c;
-	  data->tileDataCount++;
-	} else if(readingBlock == 2*levelNum + 1) {
-	  //Maximum board space: 256
-	  assert(data->pointDataCount < 256);
-	  data->pointData[data->pointDataCount] = c;
-	  data->pointDataCount++;
-	}
-           
-      }
-
-      lastChar = c;
-    }
-    if(levelFile.bad()) {
-      perror("error while reading file");
-    }
-
-    try {
-      levelFile.close();
-    } catch(...) {
-      //      std::cerr << ": " << strerror(errno);
-    }
-
-
-  } else {
-    //TODO: logging, failed to open file
-    //    std::cerr << "Error: " << strerror(errno);
-
+    logText[usedChars] = *(message + i);
+    usedChars++;
   }
-
 }
+
+
+
 
 
 unsigned int loadShaderFromFile(const char *filePath) {
@@ -249,7 +165,10 @@ struct NewRenderObject {
   unsigned int shader;
   unsigned int indicesCount;
 };
+
 NewRenderObject createNewRenderObject(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath) {
+
+  activeRenderTypes++;
 
   NewRenderObject obj = {};
 
@@ -263,7 +182,7 @@ NewRenderObject createNewRenderObject(float vertices[], int verticesLength, unsi
 
   glBufferData(GL_ARRAY_BUFFER, sizeof(float) * verticesLength, vertices, GL_STATIC_DRAW);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indicesLength, indices, GL_STATIC_DRAW);
-
+  
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float),(void*) 0);
   glEnableVertexAttribArray(0);
 
@@ -274,132 +193,25 @@ NewRenderObject createNewRenderObject(float vertices[], int verticesLength, unsi
 }
 
 
-UPDATE_RENDER_CONTEXT_VERTICES(updateRenderContextVertices) {
-  //TODO: don't use GL_STATIC_DRAW
-  glBindVertexArray(vao[context]);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo[context]);
-  glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * verticesLength, vertices);
-}
 
 
 
-void renderText(std::string text, float x, float y, float scale, vec3 color) {
-  
-  glUseProgram(fontShader);
-  glUniform3f(glGetUniformLocation(fontShader, "textColor"), color.x, color.y, color.z);
-  glActiveTexture(GL_TEXTURE0);
-  glBindVertexArray(fontVao);
+inline FILETIME getLastWriteTime(char *filename) {
 
-  for(int i=0; i<text.size(); i++) {
-    char c = text[i];
-    Character ch = characters[c];
-
-    float xpos = x + ch.bearing.x * scale;
-    float ypos = y - (ch.size.y - ch.bearing.y) * scale;
-
-    float w = ch.size.x * scale;
-    float h = ch.size.y * scale;
-    
-    float vertices[6][4] = {
-      {xpos,     ypos + h, 0.f, 0.f},
-      {xpos,     ypos,     0.f, 1.f},
-      {xpos + w, ypos,     1.f, 1.f},
-
-      {xpos,     ypos + h, 0.f, 0.f},
-      {xpos + w, ypos,     1.f, 1.f},
-      {xpos + w, ypos + h, 1.f, 0.f}
-
-    };
-
-    glBindTexture(GL_TEXTURE_2D, ch.textureID);
-
-    glBindBuffer(GL_ARRAY_BUFFER, fontVbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    x+= (ch.advance >> 6) * scale; //2^6 = 64 aka 1 pixel
-    
+  FILETIME lastWriteTime = {};
+  WIN32_FIND_DATA findData;
+  HANDLE findHandle = FindFirstFileA(filename, &findData);
+  if(findHandle != INVALID_HANDLE_VALUE) {
+    lastWriteTime = findData.ftLastWriteTime;
+    FindClose(findHandle);
   }
-
-  glBindVertexArray(0);
-  glBindTexture(GL_TEXTURE_2D, 0);  
-
-}
-
-//TODO: don't use string
-DEBUG_LOG(debugLog) {
-  SDL_memset(logText, 0, sizeof(char) * 4096);
-  for(int i=0; i<4096; i++) {
-    if(text[i] == '\0' || text[i] == '\n') {
-      break;
-    } else {
-      logText[i] = text[i];
-    }
-  }
-}
-
-
-int wmain(int argc, char *argv[]) {
-
-/**
-int CALLBACK  WinMain(
-		      HINSTANCE Instance,
-		      HINSTANCE PrevInstance,
-		      LPSTR     CommandLine,
-		      int       ShowCode )
-{
-**/
   
-  if(SDL_Init(SDL_INIT_VIDEO |
-	      SDL_INIT_AUDIO |
-	      SDL_INIT_TIMER |
-	      SDL_INIT_EVENTS) == 0) {
+  return lastWriteTime;
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
-
-    SDL_Window *window = SDL_CreateWindow("Reflection Game",
-					  SDL_WINDOWPOS_UNDEFINED,
-					  SDL_WINDOWPOS_UNDEFINED,
-					  screenWidth, screenHeight,
-					  SDL_WINDOW_OPENGL); //TODO: SDL_WINDOW_FULLSCREEN    
-    if(window) {
-
-      SDL_GLContext context = SDL_GL_CreateContext(window);
-      if(context) {
-
-	//TODO: account for possible failure
-	gladLoadGL((GLADloadfunc) SDL_GL_GetProcAddress);
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
 
 
-	SDL_AudioSpec want;
-	SDL_AudioSpec have;
-	SDL_AudioDeviceID device;
-
-	//	int samplePos = 0;
-	
-	SDL_memset(&want, 0, sizeof(want)); /* or SDL_zero(want) */
-	want.freq = 48000;
-	want.format = AUDIO_S16SYS;
-	want.channels = 1;
-	want.samples = 4096;
-	want.callback = NULL;
-
-	//TODO: account for available sound card format
-	device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0); //SDL_AUDIO_ALLOW_FORMAT_CHANGE	
-
-	//Start playing audio
-	SDL_PauseAudioDevice(device, 0);	
-	
-	//Synchronize buffer swap with monitor's vertical refresh
-	SDL_GL_SetSwapInterval(1);
-
-	
+GameCode loadGameCode(char *sourceDLLName, char *tempDLLName) {
 
 	float background_vertices[] = {
 	  -50.0f, -50.0f, 0.0f, 
@@ -506,6 +318,343 @@ int CALLBACK  WinMain(
 	indicesCount[FRONT_GRID] = frontGridObj.indicesCount;
 
 
+
+
+  
+
+  GameCode gameCode = {};
+
+  gameCode.dllLastWriteTime = getLastWriteTime(sourceDLLName);
+  
+  CopyFile(sourceDLLName, tempDLLName, FALSE);
+  
+  gameCode.gameHandle = LoadLibrary(tempDLLName);
+  if(gameCode.gameHandle) {
+    gameCode.gameUpdateAndRender = (GameUpdateAndRender *)
+      GetProcAddress(gameCode.gameHandle, "gameUpdateAndRender");
+    
+    gameCode.isValid = (gameCode.gameUpdateAndRender);
+  }
+
+  if(!gameCode.isValid) {
+    gameCode.gameUpdateAndRender = gameUpdateAndRenderStub;
+  }
+
+  return gameCode;
+
+}
+
+
+void unloadGameCode(GameCode *gameCode) {
+
+  glDeleteVertexArrays(activeRenderTypes, vao);
+  glDeleteBuffers(activeRenderTypes, vbo);
+  glDeleteBuffers(activeRenderTypes, ebo);
+  activeRenderTypes = 0;
+  
+  if(gameCode->gameHandle) {
+    FreeLibrary(gameCode->gameHandle);
+  }
+  gameCode->isValid = false;
+  gameCode->gameUpdateAndRender = gameUpdateAndRenderStub;
+  
+}
+	
+
+
+
+
+
+LOAD_LEVEL_FROM_FILE(loadLevelFromFile) {
+
+  SDL_memset(data, 0, sizeof(LoadedLevel));
+
+  if(std::ifstream levelFile{"levels"}) {
+    
+    int readingBlock = 0;
+    bool onNumBlock = false;
+  
+    char lastChar = 'Q';
+    char c;  
+    while(levelFile.get(c)) {
+      if(c=='0' || c=='1' || c=='2' || c=='3') {
+	onNumBlock = true;
+
+	if(readingBlock == 2*levelNum) {
+	  //Maximum board space: 256
+	  assert(data->tileDataCount < 256);
+	  data->tileData[data->tileDataCount] = c;
+	  data->tileDataCount++;
+	} else if(readingBlock == 2*levelNum + 1) {
+	  //Maximum board space: 256
+	  assert(data->pointDataCount < 256);
+	  data->pointData[data->pointDataCount] = c;
+	  data->pointDataCount++;
+	}
+      
+      } else if(c=='\n' && lastChar=='\n') {
+	//new paragraph
+	if(onNumBlock) {
+	  readingBlock += 1;
+	}
+	onNumBlock = false;
+	
+      } else if(c=='\n' && onNumBlock) {
+	//just single line break, continue as normal
+
+
+	if(readingBlock == 2*levelNum) {
+	  //Maximum board space: 256
+	  assert(data->tileDataCount < 256);
+	  data->tileData[data->tileDataCount] = c;
+	  data->tileDataCount++;
+	} else if(readingBlock == 2*levelNum + 1) {
+	  //Maximum board space: 256
+	  assert(data->pointDataCount < 256);
+	  data->pointData[data->pointDataCount] = c;
+	  data->pointDataCount++;
+	}
+           
+      }
+
+      lastChar = c;
+    }
+    if(levelFile.bad()) {
+      perror("error while reading file");
+    }
+
+    try {
+      levelFile.close();
+    } catch(...) {
+      //      std::cerr << ": " << strerror(errno);
+    }
+
+
+  } else {
+    //TODO: logging, failed to open file
+    //    std::cerr << "Error: " << strerror(errno);
+
+  }
+
+}
+
+
+
+UPDATE_RENDER_CONTEXT_VERTICES(updateRenderContextVertices) {
+  //TODO: don't use GL_STATIC_DRAW
+  glBindVertexArray(vao[context]);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo[context]);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * verticesLength, vertices);
+}
+
+
+
+void renderText(std::string text, float x, float y, float scale, vec3 color) {
+  
+  glUseProgram(fontShader);
+  glUniform3f(glGetUniformLocation(fontShader, "textColor"), color.x, color.y, color.z);
+  glActiveTexture(GL_TEXTURE0);
+  glBindVertexArray(fontVao);
+
+  for(int i=0; i<text.size(); i++) {
+    char c = text[i];
+    Character ch = characters[c];
+
+    float xpos = x + ch.bearing.x * scale;
+    float ypos = y - (ch.size.y - ch.bearing.y) * scale;
+
+    float w = ch.size.x * scale;
+    float h = ch.size.y * scale;
+    
+    float vertices[6][4] = {
+      {xpos,     ypos + h, 0.f, 0.f},
+      {xpos,     ypos,     0.f, 1.f},
+      {xpos + w, ypos,     1.f, 1.f},
+
+      {xpos,     ypos + h, 0.f, 0.f},
+      {xpos + w, ypos,     1.f, 1.f},
+      {xpos + w, ypos + h, 1.f, 0.f}
+    };
+
+    glBindTexture(GL_TEXTURE_2D, ch.textureID);
+
+    glBindBuffer(GL_ARRAY_BUFFER, fontVbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    x+= (ch.advance >> 6) * scale; //2^6 = 64 aka 1 pixel
+    
+  }
+
+  glBindVertexArray(0);
+  glBindTexture(GL_TEXTURE_2D, 0);  
+
+}
+
+DEBUG_LOG(debugLog) {
+  //SDL_memset(logText, 0, sizeof(char) * MAX_LOG_TEXT);
+  for(int i=0; i<MAX_LOG_TEXT-usedChars; i++) {
+    if(text[i] == '\0') {
+      break;
+    } else {
+      logText[usedChars] = text[i];
+      usedChars++;
+    }
+  }
+}
+
+
+
+void catStrings(size_t sourceACount, char *sourceA,
+			 size_t sourceBCount, char *sourceB,
+			 size_t destCount, char *dest) {
+  for(int index = 0; index < sourceACount; index++) {
+    *dest++ = *sourceA++;
+  }
+  for(int index = 0; index < sourceBCount; index++) {
+    *dest++ = *sourceB++;
+  }
+
+  *dest++ = 0;
+}
+
+void win32BeginRecordingInput(LoopedCodeData *loopedCodeData) {
+  char *filename = "foo.ri";
+  loopedCodeData->recordingFileHandle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+
+  DWORD bytesWritten;
+  WriteFile(loopedCodeData->recordingFileHandle, loopedCodeData->gameMemoryBlock,
+	    loopedCodeData->gameMemoryBlockSize, &bytesWritten, 0);
+
+
+}
+
+void win32EndRecordingInput(LoopedCodeData *loopedCodeData) {
+  CloseHandle(loopedCodeData->recordingFileHandle);
+}
+
+void win32BeginInputPlayback(LoopedCodeData *loopedCodeData) {
+  char *filename = "foo.ri";
+  loopedCodeData->playbackFileHandle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+
+  DWORD bytesRead;
+  ReadFile(loopedCodeData->playbackFileHandle, loopedCodeData->gameMemoryBlock,
+	   loopedCodeData->gameMemoryBlockSize, &bytesRead, 0);
+
+  
+}
+
+void win32EndInputPlayback(LoopedCodeData *loopedCodeData) {
+  CloseHandle(loopedCodeData->playbackFileHandle);
+}
+
+
+
+void win32RecordInput(LoopedCodeData *loopedCodeData, gameInput *newInput) {
+
+  DWORD bytesWritten;
+  WriteFile(loopedCodeData->recordingFileHandle, newInput, sizeof(gameInput), &bytesWritten, 0);
+
+}
+
+void win32PlaybackInput(LoopedCodeData *loopedCodeData, gameInput *newInput) {
+  DWORD bytesRead;
+  if(ReadFile(loopedCodeData->playbackFileHandle, newInput, sizeof(gameInput), &bytesRead, 0) && bytesRead != 0) {
+
+  } else {
+    win32EndInputPlayback(loopedCodeData);
+    win32BeginInputPlayback(loopedCodeData);
+  }
+}
+
+
+int wmain(int argc, char *argv[]) {
+
+/**
+int CALLBACK  WinMain(
+		      HINSTANCE Instance,
+		      HINSTANCE PrevInstance,
+		      LPSTR     CommandLine,
+		      int       ShowCode )
+{
+**/
+
+  //NOTE: never use MAX_PATH in user-facing code
+  char exeFileName[MAX_PATH];
+  DWORD sizeOfFilename = GetModuleFileNameA(0, exeFileName, sizeof(exeFileName));
+
+  char *onePastLastSlash = exeFileName;
+  for(char *scan = exeFileName; *scan; scan++) {
+    if(*scan == '\\') {
+      onePastLastSlash = scan + 1;
+    }
+  }
+
+
+  char sourceGameCodeDLLFilename[] = "reflect.dll";
+  char sourceGameCodeDLLFullPath[MAX_PATH];
+  catStrings(onePastLastSlash - exeFileName, exeFileName,
+	     sizeof(sourceGameCodeDLLFilename) - 1, sourceGameCodeDLLFilename,
+	     sizeof(sourceGameCodeDLLFullPath), sourceGameCodeDLLFullPath);
+
+  
+  char tempGameCodeDLLFilename[] = "temp_reflect.dll";
+  char tempGameCodeDLLFullPath[MAX_PATH];
+  catStrings(onePastLastSlash - exeFileName, exeFileName,
+	     sizeof(tempGameCodeDLLFilename) - 1, tempGameCodeDLLFilename,
+	     sizeof(tempGameCodeDLLFullPath), tempGameCodeDLLFullPath);
+  
+  
+  if(SDL_Init(SDL_INIT_VIDEO |
+	      SDL_INIT_AUDIO |
+	      SDL_INIT_TIMER |
+	      SDL_INIT_EVENTS) == 0) {
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
+
+    SDL_Window *window = SDL_CreateWindow("Reflection Game",
+					  SDL_WINDOWPOS_UNDEFINED,
+					  SDL_WINDOWPOS_UNDEFINED,
+					  screenWidth, screenHeight,
+					  SDL_WINDOW_OPENGL); //TODO: SDL_WINDOW_FULLSCREEN    
+    if(window) {
+
+      SDL_GLContext context = SDL_GL_CreateContext(window);
+      if(context) {
+
+	//TODO: account for possible failure
+	gladLoadGL((GLADloadfunc) SDL_GL_GetProcAddress);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+
+	SDL_AudioSpec want;
+	SDL_AudioSpec have;
+	SDL_AudioDeviceID device;
+
+	//	int samplePos = 0;
+	
+	SDL_memset(&want, 0, sizeof(want)); /* or SDL_zero(want) */
+	want.freq = 48000;
+	want.format = AUDIO_S16SYS;
+	want.channels = 1;
+	want.samples = 4096;
+	want.callback = NULL;
+
+	//TODO: account for available sound card format
+	device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0); //SDL_AUDIO_ALLOW_FORMAT_CHANGE	
+
+	//Start playing audio
+	SDL_PauseAudioDevice(device, 0);	
+	
+	//Synchronize buffer swap with monitor's vertical refresh
+	SDL_GL_SetSwapInterval(1);
+
+
        
 	//TODO: look into different allocator than malloc
 	int maxRenderObjects = 1000;
@@ -517,9 +666,10 @@ int CALLBACK  WinMain(
 	  renderObjects};
 
 
+	LoopedCodeData loopedCodeData = {};
 
 	//Game Memory
-	gameMemory memory;
+	gameMemory memory = {};
 	memory.isInitialized = false;
 	memory.permanentStorageSize = PERMANENT_STORAGE_SIZE;
 	memory.temporaryStorageSize = TEMPORARY_STORAGE_SIZE;
@@ -529,30 +679,36 @@ int CALLBACK  WinMain(
 	memory.updateRenderContextVertices = updateRenderContextVertices;
 	memory.debugLog = debugLog;
 
-	/*
-	memory.permanentStorage = malloc(PERMANENT_STORAGE_SIZE +
-					 TEMPORARY_STORAGE_SIZE);
-	memory.temporaryStorage = (void *)((char *) memory.permanentStorage +
-					   PERMANENT_STORAGE_SIZE);
-	*/
 
+	LPVOID baseAddress = 0;
+
+	loopedCodeData.gameMemoryBlock  = VirtualAlloc(baseAddress,
+			 (size_t)(PERMANENT_STORAGE_SIZE+TEMPORARY_STORAGE_SIZE),
+			 MEM_RESERVE|MEM_COMMIT,
+			 PAGE_READWRITE);
+	loopedCodeData.gameMemoryBlockSize = PERMANENT_STORAGE_SIZE + TEMPORARY_STORAGE_SIZE;
+
+	memory.permanentStorage = loopedCodeData.gameMemoryBlock;
+	memory.temporaryStorage = ((uint8 *)memory.permanentStorage + memory.permanentStorageSize);
+
+	/*
 	memory.permanentStorage = malloc(PERMANENT_STORAGE_SIZE);
 	memory.temporaryStorage = malloc(TEMPORARY_STORAGE_SIZE);
 
 	SDL_memset(memory.permanentStorage, 0, memory.permanentStorageSize);
 	SDL_memset(memory.temporaryStorage, 0, memory.temporaryStorageSize);
+	*/
 
+	//Memory snapshot for live looped code editing
 
-
-	GameCode gameCode = loadGameCode();
 
 	
-
 	//Audio
 	int audioStreamMaxSize = (int)(sizeof(int16) * sampleRate * 0.5f); //enough for 1/2 second
 	int16 *stream = (int16 *)malloc(audioStreamMaxSize);
 
 
+	//TODO: use open-source font
 	//Fonts
 	FT_Library ft;
 	if(FT_Init_FreeType(&ft)) {
@@ -606,8 +762,6 @@ int CALLBACK  WinMain(
 	FT_Done_Face(face);
 	FT_Done_FreeType(ft);
 
-
-
 	glGenVertexArrays(1, &fontVao);
 	glGenBuffers(1, &fontVbo);
 	glBindVertexArray(fontVao);
@@ -637,11 +791,35 @@ int CALLBACK  WinMain(
 	int samplePos = 0;
 	
 	bool running = true;
+	int counter = 0;
+
+	GameCode gameCode = loadGameCode(sourceGameCodeDLLFullPath,
+					 tempGameCodeDLLFullPath);
+
+	loopedCodeData.isRecording = false;
+	
+	FILETIME prevFrameDllWriteTime = getLastWriteTime(sourceGameCodeDLLFullPath);
+	
 	while(running) {
 
-	   
-	  
 
+	  FILETIME newDllWriteTime = getLastWriteTime(sourceGameCodeDLLFullPath);
+	  if(CompareFileTime(&newDllWriteTime, &prevFrameDllWriteTime) == 0) {
+
+	    if(CompareFileTime(&newDllWriteTime, &gameCode.dllLastWriteTime) != 0) {
+	      //gameCode.dllLastWriteTime = newDllWriteTime;
+	      
+	      unloadGameCode(&gameCode);
+	      gameCode = loadGameCode(sourceGameCodeDLLFullPath,
+				      tempGameCodeDLLFullPath);
+	      //counter = 30;
+
+	    }
+	  }
+
+	  prevFrameDllWriteTime = newDllWriteTime;
+
+	  
 	  SDL_memset(renderMemoryInfo.memory, 0, sizeof(renderObject) * renderMemoryInfo.count);
 	  SDL_memset(memory.temporaryStorage, 0, memory.temporaryStorageSize);
 
@@ -681,6 +859,28 @@ int CALLBACK  WinMain(
 		if(event.type == SDL_KEYDOWN && event.key.keysym.scancode==SDL_SCANCODE_ESCAPE) {
 		  running = false;
 		}
+		if(event.type == SDL_KEYDOWN && event.key.keysym.scancode==SDL_SCANCODE_L) {
+		  if(!loopedCodeData.isRecording && !loopedCodeData.isPlayingBack) {
+		    //start recording
+		    loopedCodeData.isRecording = true;
+		    win32BeginRecordingInput(&loopedCodeData);
+		    
+		  } else if(loopedCodeData.isRecording) {
+		    //stop recording, start playback		    
+		    loopedCodeData.isRecording = false;
+		    loopedCodeData.isPlayingBack = true;
+
+		    win32EndRecordingInput(&loopedCodeData);
+
+		    win32BeginInputPlayback(&loopedCodeData);
+
+
+		  } else if(loopedCodeData.isPlayingBack) {
+		    loopedCodeData.isPlayingBack = false;
+		    win32EndInputPlayback(&loopedCodeData);
+		    
+		  }
+		}
 		if(event.key.keysym.scancode==SDL_SCANCODE_R) {
 		  mainController.rKey.transitionCount += 1;
 		  mainController.rKey.endedDown = (event.type==SDL_KEYUP);
@@ -692,7 +892,15 @@ int CALLBACK  WinMain(
 		if(event.key.keysym.scancode==SDL_SCANCODE_RIGHT) {
 		  mainController.rightArrow.transitionCount += 1;
 		  mainController.rightArrow.endedDown = (event.type==SDL_KEYUP);
-		}		
+		}
+
+		if(event.key.keysym.scancode==SDL_SCANCODE_Q) {
+		  #ifdef REFLECT_INTERNAL
+		  
+		  unloadGameCode(&gameCode);
+		  gameCode = loadGameCode(sourceGameCodeDLLFullPath, tempGameCodeDLLFullPath);
+		  #endif
+		}
 	      } break;
 	      
 	    
@@ -707,6 +915,9 @@ int CALLBACK  WinMain(
 	  //std::cout << "Mouse x " << mainController.mouseX << "\n";
 	  //std::cout << "Mouse y " << mainController.mouseY << "\n";
 
+	  SDL_memset(logText, 0, sizeof(char) * MAX_LOG_TEXT);
+	  usedChars = 0;
+
 	  int bytesLeftInQueue = SDL_GetQueuedAudioSize(device);
 	  int samplesLeftInQueue = bytesLeftInQueue / 2;
 	  int samplesToAppend = 0;
@@ -719,13 +930,11 @@ int CALLBACK  WinMain(
 	    samplesToAppend = audioStreamMaxSize;
 	  }
 	  
-
-
 	  gameInput input;
 	  input.screenWidth = screenWidth;
 	  input.screenHeight = screenHeight;
 	  input.controllers[0] = mainController;
-
+	  
 	  uint64 timerCount = SDL_GetPerformanceCounter();
 	  uint64 deltaCount = timerCount - prevTime;	  
 	  uint32 deltaTime = (uint32) (1000.f * (float)deltaCount / (float)timerFrequency);
@@ -735,6 +944,13 @@ int CALLBACK  WinMain(
 	  prevTime = timerCount;
 	  //std::cout << "Duraton: "<<deltaTime<< " ms\n";
 
+	  
+	  if(loopedCodeData.isRecording) {
+	    win32RecordInput(&loopedCodeData, &input);
+	  }
+	  if(loopedCodeData.isPlayingBack) {
+	    win32PlaybackInput(&loopedCodeData, &input);
+	  }
 	  
 	  gameCode.gameUpdateAndRender(input, &memory, &renderMemoryInfo);
 	  
@@ -791,7 +1007,25 @@ int CALLBACK  WinMain(
 	  char fpsCounter[256];
 	  sprintf_s(fpsCounter, "Frame duration: %i ms", frameDurationLabel);
 	  renderText(fpsCounter, 10.f, screenHeight - 20.f, 0.3f, vec3{1.f, 1.f, 1.f});
-	  renderText(logText, 10.f, screenHeight - 60.f, 0.4f, vec3{1.f, 1.f, 1.f});
+
+	  char frameCounter[256];
+	  sprintf_s(frameCounter, "Counter: %i ", counter);
+	  renderText(frameCounter, 10.f, screenHeight - 40.f, 0.3f, vec3{1.f, 1.f, 1.f});
+
+	  char recordingText[256];
+	  sprintf_s(recordingText, "Is recording: %i ", loopedCodeData.isRecording);
+	  renderText(recordingText, 10.f, screenHeight - 60.f, 0.3f, vec3{1.f, 1.f, 1.f});
+
+	  char playbackText[256];
+	  sprintf_s(playbackText, "Is playing back: %i ", loopedCodeData.isPlayingBack);
+	  renderText(playbackText, 10.f, screenHeight - 80.f, 0.3f, vec3{1.f, 1.f, 1.f});
+
+	  //log("print this ");
+	  //log("and print this\n");
+
+	  renderText(logText, 10.f, screenHeight - 100.f, 0.4f, vec3{1.f, 1.f, 1.f});
+
+	  //std::cout << ("print this " + "and this\n");
 
 	  SDL_GL_SwapWindow(window);
 	}
@@ -823,4 +1057,3 @@ int CALLBACK  WinMain(
 
   return 0;
 }
-

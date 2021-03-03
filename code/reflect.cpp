@@ -518,7 +518,6 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
 //void gameUpdateAndRender(gameInput input, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo) {
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
-
   controllerInput controller = input.controllers[0];
 
   /**
@@ -540,8 +539,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   assert( (char*)state+sizeof(LevelState) - (char*)memoryInfo->permanentStorage < memoryInfo->permanentStorageSize);
 
 
+  //levelInfo->player_pos_original = ivec2{5,5};
+
+
   void *tempMemory = memoryInfo->temporaryStorage;
-  
+
   if(!memoryInfo->isInitialized) {
     loadLevel(memoryInfo, gameState, levelInfo, state, tempMemory, 0);
     memoryInfo->isInitialized = true;
@@ -627,7 +629,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     renderMemory++;
   }
 
-
+#if 1
   //Player
   {
     mat4 model = identity4;
@@ -636,7 +638,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
     renderMemory++;
   }
-
+  
   //Second player
   if(levelInfo->hasSecondPlayer) {
     mat4 model = identity4;
@@ -645,7 +647,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
     renderMemory++; 
   }
-
+#endif
 
   //Anchors
 
@@ -924,14 +926,3 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 }
 
-
-//#if REFLECT_WIN32
-#include <windows.h>
-BOOL WINAPI DllMain(
-    HINSTANCE hinstDLL,  // handle to DLL module
-    DWORD fdwReason,     // reason for calling function
-    LPVOID lpReserved )  // reserved
-{
-  return TRUE;
-}
-//#endif

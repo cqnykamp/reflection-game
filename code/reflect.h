@@ -7,8 +7,16 @@
 
 #define PI 3.1415926535897932384626433f
 
+#ifdef REFLECT_INTERNAL
+
 #define assert(expression) \
   if(!(expression)) {*(int *)0 = 0;}
+
+#else
+
+#define assert
+
+#endif
 
 typedef uint8_t uint8;
 typedef uint16_t uint16;
@@ -84,8 +92,6 @@ struct gameInput {
   uint32 deltaTime;
   controllerInput controllers[4];
 };
-
-
 
 struct renderObject {
   RenderContext renderContext;
