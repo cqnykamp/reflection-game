@@ -109,6 +109,7 @@ struct renderObject {
 struct gameMemory {
   bool isInitialized;
   bool isDllFirstFrame;
+  bool usingHex;
   
   int permanentStorageSize;
   int temporaryStorageSize;
@@ -129,9 +130,6 @@ struct RenderMemoryInfo {
 };
 
 
-
-
-
 #define GAME_UPDATE_AND_RENDER(name) void name(gameInput input, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo)
 
 typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
@@ -141,15 +139,6 @@ GAME_UPDATE_AND_RENDER(gameUpdateAndRenderStub) {
 }
 
 
-
-
-/**
-struct PlatformCalls {
-  LoadLevelFromFile *loadLevelFromFile;
-  UpdateRenderContextVertices *updateRenderContextVertices;
-  CreateNewRenderObject *CreateNewRenderObject;
-};
-**/
 
 #define REFLECT_H
 #endif

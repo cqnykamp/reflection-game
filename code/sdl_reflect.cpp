@@ -574,6 +574,7 @@ int CALLBACK  WinMain(
 	gameMemory memory = {};
 	memory.isInitialized = false;
 	memory.isDllFirstFrame = true;
+	memory.usingHex = false;
 	memory.permanentStorageSize = PERMANENT_STORAGE_SIZE;
 	memory.temporaryStorageSize = TEMPORARY_STORAGE_SIZE;
 
@@ -762,10 +763,13 @@ int CALLBACK  WinMain(
 	    case SDL_KEYDOWN:
 	    case SDL_KEYUP:
 	      {
-		if(event.type == SDL_KEYDOWN && event.key.keysym.scancode==SDL_SCANCODE_ESCAPE) {
+
+		SDL_Scancode scancode = event.key.keysym.scancode;
+		
+		if(event.type == SDL_KEYDOWN && scancode==SDL_SCANCODE_ESCAPE) {
 		  running = false;
 		}
-		if(event.type == SDL_KEYDOWN && event.key.keysym.scancode==SDL_SCANCODE_L) {
+		if(event.type == SDL_KEYDOWN && scancode==SDL_SCANCODE_L) {
 		  if(!loopedCodeData.isRecording && !loopedCodeData.isPlayingBack) {
 		    //start recording
 		    loopedCodeData.isRecording = true;
@@ -787,28 +791,34 @@ int CALLBACK  WinMain(
 		    
 		  }
 		}
-		if(event.key.keysym.scancode==SDL_SCANCODE_R) {
+		if(scancode==SDL_SCANCODE_R) {
 		  mainController.rKey.transitionCount += 1;
 		  mainController.rKey.endedDown = (event.type==SDL_KEYUP);
 		}
-		if(event.key.keysym.scancode==SDL_SCANCODE_LEFT) {
+		if(scancode==SDL_SCANCODE_LEFT) {
 		  mainController.leftArrow.transitionCount += 1;
 		  mainController.leftArrow.endedDown = (event.type==SDL_KEYUP);
 		}
-		if(event.key.keysym.scancode==SDL_SCANCODE_RIGHT) {
+		if(scancode==SDL_SCANCODE_RIGHT) {
 		  mainController.rightArrow.transitionCount += 1;
 		  mainController.rightArrow.endedDown = (event.type==SDL_KEYUP);
 		}
 
-		if(event.key.keysym.scancode==SDL_SCANCODE_Q) {
+		if(event.type==SDL_KEYDOWN &&
+		   (scancode==SDL_SCANCODE_Q || scancode==SDL_SCANCODE_H)) {
 		  #ifdef REFLECT_INTERNAL
 
 		  memory.isDllFirstFrame = true;
+		  if(scancode==SDL_SCANCODE_H) {
+		    memory.usingHex = !memory.usingHex;
+		  }
 		  unloadGameCode(&gameCode);
 		  gameCode = loadGameCode(sourceGameCodeDLLFullPath, tempGameCodeDLLFullPath);
 		  
 		  #endif
 		}
+
+
 	      } break;
 	      
 	    

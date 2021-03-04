@@ -7,7 +7,6 @@ uniform mat4 view;
 uniform mat4 model;
 
 void main() {
-  //uv = vec2(aPos.x, aPos.y);
 
   //NOTE: does not use view or model currently
   gl_Position = vec4(aPos, 1.0f);
