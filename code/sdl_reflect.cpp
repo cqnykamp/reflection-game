@@ -1,5 +1,6 @@
 //TODO: figure out why startup is laggy aka >17ms per frame
 //TODO: better logging system?
+//TODO: inner looop frame time display
 
 //#define SDL_MAIN_HANDLED
 #include "SDL/SDL.h"
