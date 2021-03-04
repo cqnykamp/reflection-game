@@ -50,6 +50,7 @@ enum MirrorState {
   MIRROR_DRAGGABLE,
   MIRROR_LOCKED
 };
+
 enum Angle {
   RIGHT = 0,
   UP_RIGHT = 1,
@@ -74,6 +75,20 @@ struct LevelState {
 };
 
 
+float customMod(float num, float base) {
+  float result = num;
+  if(result < 0) {
+    while(result + base <= base) {
+      result += base;
+    }
+  } else {
+    while(result >= base) {
+      result -= base;
+    }
+  }
+  return result;
+}
+
 
 void * claimMemory(void **existingMemoryBuffer, int bytes) {
   void *myNewMemory = *existingMemoryBuffer;
@@ -84,10 +99,12 @@ void * claimMemory(void **existingMemoryBuffer, int bytes) {
 
 vec2 squareToHexGrid(vec2 squareCoords) {
   float hexY = squareCoords.y; // * sqrt(0.75f);
-  return vec2 {
-    squareCoords.x + 0.5f * abs( fmod(hexY - 1.f, 2.f) - 1.f),
+
+  vec2 newCoords = vec2 {
+    squareCoords.x + 0.5f * abs( customMod(hexY - 1.f, 2.f) - 1.f),
     hexY * sqrt(0.75f)
   };
+  return newCoords;
 }
 
 
@@ -139,8 +156,11 @@ ivec2 nearestAnchor(LevelInfo *levelInfo, vec2 point) {
   float dist = 10000;
   for(int yid=0; yid<(levelInfo->level_height+1); yid++) {
     for(int xid=0; xid<(levelInfo->level_width+1); xid++) {
-      if(levelInfo->board[yid][xid] == 1) {	
-	float current_dist = magnitude(point - ivec2{xid,yid});
+      if(levelInfo->board[yid][xid] == 1) {
+
+	vec2 hexVec = squareToHexGrid(vec2{(float)xid, (float)yid});
+
+	float current_dist = magnitude(point - hexVec);
 	if(current_dist < dist) {
 	  nearest_anchor = ivec2{xid,yid};
 	  dist = current_dist;
@@ -156,7 +176,7 @@ bool isNearbyAnchor(LevelInfo *levelInfo, vec2 coord, float maxAcceptableDistanc
   for(int yid=0; yid < (levelInfo->level_height+1); yid++) {
     for(int xid=0; xid < (levelInfo->level_width+1); xid++) {
       if(levelInfo->board[yid][xid] == 1
-	 && magnitude(coord - ivec2{xid,yid}) <= maxAcceptableDistance) {
+	 && magnitude(coord - squareToHexGrid(ivec2{xid,yid})) <= maxAcceptableDistance) {
 	return true;
       }
     }
@@ -171,11 +191,14 @@ void reflect_along(LevelState *state, ivec2 anchor, Angle angle) {
   switch(angle) {
     
   case RIGHT: {
+
     reflectMatrix = {
       1,  0, 0,
       0, -1, 2*anchor.y,
       0,  0, 1
     };  
+
+    
   } break;
     
   case UP_RIGHT: {
@@ -304,6 +327,12 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
   unsigned int bufferid;
 
   memoryInfo->debugLog("");
+
+
+  float m1 = customMod(10.2323f, 2.f);
+  float m2 = customMod(2.65234f, 7.1232f);
+  float m3 = customMod(-5.2342f, 3.f);
+  std::printf("Mods:\n%f \n%f\n%f\n", m1, m2, m3);
 
   for(int yid=0; yid<BOARD_HEIGHT; yid++) {
     for(int xid=0; xid<BOARD_WIDTH; xid++) {
@@ -563,7 +592,8 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject) {
     float floor_vertices[] = {
       0.0f, 0.0f, 0.0f,
       1.0f, 0.0f, 0.0f,
-      0.5f, 1.0f, 0.0f
+      0.5f, sqrt(0.75f), 0.0f
+      //NOTE: these do not get affected by square to hex grid
     };
     
     unsigned int floor_indices[] = {
@@ -588,13 +618,12 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject) {
 			  "shaders/player.shader", PLAYER);
     **/
 
-    float pad = 0.15f;
+    float pad = 0.1f;
 
-    //TODO: fixme pad
     float player_vertices[] = {
-      0.f + pad, 0.f + pad, 0.f, //left
-      1.0f - pad, 0.f + pad, 0.f, //right
-      0.5f, 1.5f / sqrt(3.f) - pad, 0.f //bottom      
+      sqrt(3.f) * pad, 0.f + pad, 0.f, //left
+      1.0f - sqrt(3.f) * pad, 0.f + pad, 0.f, //right
+      0.5f, 1.5f / sqrt(3.f) - pad * 2.0f, 0.f //bottom      
     };
     unsigned int player_indices[] = {
       0, 1, 2
@@ -750,16 +779,48 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //Floor tiles
   for(int i=0; i<levelInfo->activeTiles; i++) {
 
+    //float xid = (float)floor(levelInfo->tiles[i].xid / 2.f);
+    int overlappingXid;
+    if(levelInfo->tiles[i].yid % 2 == 1) {
+      overlappingXid = levelInfo->tiles[i].xid / 2;
+    } else {
+      overlappingXid = (1 + levelInfo->tiles[i].xid) / 2; //NOTE: intentional loss of info
+    }
+    //float xid = (float)floor(levelInfo->tiles[i].xid / 2.f);
+    int numInXid = levelInfo->tiles[i].xid % 2;
+    float yid = (float)levelInfo->tiles[i].yid;
 
-    vec2 hexCoords = squareToHexGrid(vec2 {
-	(float)levelInfo->tiles[i].xid,
-	(float)levelInfo->tiles[i].yid });
-
+    vec2 hexCoords = squareToHexGrid(vec2{(float)overlappingXid, yid});
     
     mat4 model = identity4;
 
     model.xw = hexCoords.x;
     model.yw = hexCoords.y;
+
+    bool flipped = false;
+
+    if(levelInfo->tiles[i].yid % 2 == 1) {
+      flipped = !flipped;
+    }
+
+    if(numInXid == 1) {
+      flipped = !flipped;
+    }
+
+    if(flipped) {
+      model.yw += sqrt(0.75f);
+      model.xw -= 0.5f;
+      model.yy *= -1;
+    }
+
+    /**
+    if((levelInfo->tiles[i].yid + levelInfo->tiles[i].xid % 2) ==1) {
+      model.xw += 1;
+      model.yw += 1;
+      model.xx *= -1;
+      model.yy *= -1;
+    }
+    **/
 
     /*
     model.xw = (float) levelInfo->tiles[i].xid;
@@ -785,8 +846,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //Player
   {
     mat4 model = identity4;
-    model.xw = (float) levelInfo->player_pos_original.x;
-    model.yw = (float) levelInfo->player_pos_original.y;
+    vec2 hexCoords = squareToHexGrid(levelInfo->player_pos_original);
+    model.xw = hexCoords.x;
+    model.yw = hexCoords.y;
+    //model.xw = (float) levelInfo->player_pos_original.x;
+    //model.yw = (float) levelInfo->player_pos_original.y;
     *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
     renderMemory++;
   }
@@ -794,8 +858,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //Second player
   if(levelInfo->hasSecondPlayer) {
     mat4 model = identity4;
-    model.xw = (float) levelInfo->secondPlayerStartPos.x;
-    model.yw = (float) levelInfo->secondPlayerStartPos.y;
+    vec2 hexCoords = squareToHexGrid(levelInfo->secondPlayerStartPos);
+    model.xw = hexCoords.x;
+    model.yw = hexCoords.y;    
+    //model.xw = (float) levelInfo->secondPlayerStartPos.x;
+    //model.yw = (float) levelInfo->secondPlayerStartPos.y;
     *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
     renderMemory++; 
   }
@@ -811,8 +878,9 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	if(state->mirrorState==MIRROR_INACTIVE) {
 	  ivec2 myVec = {xid,yid};
+	  vec2 hexVec = squareToHexGrid(myVec);
 	  if(nearestAnchor(levelInfo, mouse_coords) == myVec
-	     && magnitude(mouse_coords - myVec) < MOUSE_HOVER_SNAP_DIST) {
+	     && magnitude(mouse_coords - hexVec) < MOUSE_HOVER_SNAP_DIST) {
 	    highlight_key = 1;
 	  }
 	}
