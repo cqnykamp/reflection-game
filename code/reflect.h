@@ -109,7 +109,7 @@ struct renderObject {
 struct gameMemory {
   bool isInitialized;
   bool isDllFirstFrame;
-  bool usingHex;
+  bool hexMode;
   
   int permanentStorageSize;
   int temporaryStorageSize;

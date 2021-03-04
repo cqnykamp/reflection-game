@@ -574,7 +574,7 @@ int CALLBACK  WinMain(
 	gameMemory memory = {};
 	memory.isInitialized = false;
 	memory.isDllFirstFrame = true;
-	memory.usingHex = false;
+	memory.hexMode = false;
 	memory.permanentStorageSize = PERMANENT_STORAGE_SIZE;
 	memory.temporaryStorageSize = TEMPORARY_STORAGE_SIZE;
 
@@ -767,7 +767,7 @@ int CALLBACK  WinMain(
 		SDL_Scancode scancode = event.key.keysym.scancode;
 		
 		if(event.type == SDL_KEYDOWN && scancode==SDL_SCANCODE_ESCAPE) {
-		  running = false;
+		  //running = false;
 		}
 		if(event.type == SDL_KEYDOWN && scancode==SDL_SCANCODE_L) {
 		  if(!loopedCodeData.isRecording && !loopedCodeData.isPlayingBack) {
@@ -810,7 +810,7 @@ int CALLBACK  WinMain(
 
 		  memory.isDllFirstFrame = true;
 		  if(scancode==SDL_SCANCODE_H) {
-		    memory.usingHex = !memory.usingHex;
+		    memory.hexMode = !memory.hexMode;
 		  }
 		  unloadGameCode(&gameCode);
 		  gameCode = loadGameCode(sourceGameCodeDLLFullPath, tempGameCodeDLLFullPath);
