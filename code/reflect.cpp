@@ -1029,10 +1029,29 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	      //if(dot(mirrorFrag, pointFrag) > 0) {
 
-	      if(magnitude(pointFrag) < state->mirrorFragmentMag) {
+	      //if(magnitude(pointFrag) < state->mirrorFragmentMag) {
+
+	      vec2 mirrorAnchor = squareToHexGrid(state->mirrorFragmentAnchor);
+	      vec2 mirrorEnd = mirrorFrag;
+	      
+	      float leftBound = min(mirrorAnchor.x, mirrorEnd.x);
+	      float rightBound = max(mirrorAnchor.x, mirrorEnd.x);
+	      float bottomBound = min(mirrorAnchor.y, mirrorEnd.y);
+	      float topBound = max(mirrorAnchor.y, mirrorEnd.y);
+	      
+	      vec2 p = squareToHexGrid(point);
+
+	      std::printf("L %f R %f B %f T %f Px %f Py %f\n",
+			  leftBound,rightBound,bottomBound,topBound,p.x,p.y);
+	      
+
+	      if( (mirrorId==3 || (p.x > leftBound && p.x < rightBound)) &&
+		  (mirrorId==0 || (p.y > bottomBound && p.y < topBound)) ) {
+		 
 
 		passesThroughLine = true;
 	      }
+		//}
 		//}
 
 	    }
@@ -1063,19 +1082,13 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	  }
 
-
-
-	  
 	  if(isTheAnchor || passesThroughLine) {
 	    highlight_key = 1;	      
 	  }
 	  
 	}
-
 	
-
 	
-	  
 	mat4 anchorModel = identity4;
 
 	if(memoryInfo->hexMode) {
@@ -1110,8 +1123,13 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //Mirror
 
   if(state->mirrorState == MIRROR_DRAGGABLE) {
-
-    vec2 d = mouse_coords - state->mirrorFragmentAnchor;
+    
+    vec2 d;
+    if(memoryInfo->hexMode) {
+      d = mouse_coords - squareToHexGrid(state->mirrorFragmentAnchor);
+    } else {
+      d = mouse_coords - state->mirrorFragmentAnchor;
+    }
     float theta  = atan2(d.y, d.x);
     float mag = magnitude(d);
 
@@ -1256,13 +1274,27 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     vec2 diff;
     if(memoryInfo->hexMode) {
 
-      vec2 mirrorDir = vec2 {
-	cos(state->hexMirrorAngleId * PI/6.f),
-	sin(state->hexMirrorAngleId * PI/6.f)
-      };
+
+      float theta = (float)state->hexMirrorAngleId * PI/6.f;
+      theta = fmod(theta + 4*PI, 2*PI);
+
+      float xdir = cos(theta);
+      float ydir = sin(theta);
+      //std::cout << "Theta "<<theta<<" Mirror dir "<< xdir<<" "<<ydir<<"\n";
+
+
+      vec2 mirrorDir = vec2 {xdir, ydir};
       
       mirrorExtension = extensionMag * mirrorDir;
-      diff = state->mirrorFragmentMag * mirrorDir;      
+      diff = state->mirrorFragmentMag * mirrorDir;
+
+      vec2 diffToMouse = mouse_coords-squareToHexGrid(state->mirrorFragmentAnchor);
+
+      /*
+      std::cout << "Mag target "<<state->mirrorFragmentMag<<
+	" diff "<<magnitude(diff)<<
+	" mouse "<< magnitude(diffToMouse)<<"\n";
+      */
 
     } else {
       mirrorExtension = extensionMag * magSign * toVec(state->mirrorFragmentAngle);

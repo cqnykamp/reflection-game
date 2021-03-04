@@ -3,7 +3,25 @@
 
 #include <cmath>
 
-#include<vector>
+
+
+float max(float a, float b) {
+  if(a > b) {
+    return a;
+  } else {
+    return b;
+  }
+}
+
+float min(float a, float b) {
+  if(a < b) {
+    return a;
+  } else {
+    return b;
+  }
+}
+
+
 
 //
 //
