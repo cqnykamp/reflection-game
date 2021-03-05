@@ -1,6 +1,5 @@
 //TODO: figure out why startup is laggy aka >17ms per frame
 //TODO: better logging system?
-//TODO: inner looop frame time display
 
 //#define SDL_MAIN_HANDLED
 #include "SDL/SDL.h"
@@ -58,6 +57,7 @@ char logText[MAX_LOG_TEXT];
 int usedChars = 0;
 
 int frameDurationLabel;
+int innerFrameDurationLabel;
 uint32 lastLabelTimestamp = 0;
 
 struct GameCode {
@@ -692,6 +692,8 @@ int CALLBACK  WinMain(
 
 	uint64 timerFrequency = SDL_GetPerformanceFrequency();
 	uint64 prevTime = SDL_GetPerformanceCounter();
+
+	uint64 innerFrameTime = 0;
 	
 	int samplesAheadTarget = (int) (sampleRate * 0.1f); // 1/10 of a sec ahead
 	int samplePos = 0;
@@ -709,6 +711,7 @@ int CALLBACK  WinMain(
 	
 	while(running) {
 
+	  uint64 innerFrameStart = SDL_GetPerformanceCounter();
 
 	  FILETIME newDllWriteTime = getLastWriteTime(sourceGameCodeDLLFullPath);
 	  if(CompareFileTime(&newDllWriteTime, &prevFrameDllWriteTime) == 0) {
@@ -918,31 +921,41 @@ int CALLBACK  WinMain(
 	    
 	  }
 
-	  if(currentTime > lastLabelTimestamp + 1000) {
+	  uint32 innerDeltaTime = (uint32) (1000.f*(float)innerFrameTime / (float)timerFrequency);	  
+
+	  if(currentTime > lastLabelTimestamp + 500) {
 	    frameDurationLabel = (int)deltaTime;
+	    innerFrameDurationLabel = (int)innerDeltaTime;
 	    lastLabelTimestamp = currentTime;
 	  }
 
 	  char fpsCounter[256];
-	  sprintf_s(fpsCounter, "Frame duration: %i ms", frameDurationLabel);
-	  renderText(fpsCounter, 10.f, screenHeight - 20.f, 0.3f, vec3{1.f, 1.f, 1.f});
+	  sprintf_s(fpsCounter, "Frame dur (ms): %i", frameDurationLabel);
+	  renderText(fpsCounter, 10.f, screenHeight - 20.f, 0.25f, vec3{1.f, 1.f, 1.f});
 
+	  char label[256];
+	  sprintf_s(label, "Inner dur (ms): %i",innerFrameDurationLabel);
+	  renderText(label, 10.f, screenHeight - 35.f, 0.25f, vec3{1.f, 1.f, 1.f});
+	  
 	  char frameCounter[256];
 	  sprintf_s(frameCounter, "Counter: %i ", counter);
-	  renderText(frameCounter, 10.f, screenHeight - 40.f, 0.3f, vec3{1.f, 1.f, 1.f});
+	  renderText(frameCounter, 10.f, screenHeight - 60.f, 0.3f, vec3{1.f, 1.f, 1.f});
 
 	  char recordingText[256];
 	  sprintf_s(recordingText, "Is recording: %i ", loopedCodeData.isRecording);
-	  renderText(recordingText, 10.f, screenHeight - 60.f, 0.3f, vec3{1.f, 1.f, 1.f});
+	  renderText(recordingText, 10.f, screenHeight - 80.f, 0.3f, vec3{1.f, 1.f, 1.f});
 
 	  char playbackText[256];
 	  sprintf_s(playbackText, "Is playing back: %i ", loopedCodeData.isPlayingBack);
-	  renderText(playbackText, 10.f, screenHeight - 80.f, 0.3f, vec3{1.f, 1.f, 1.f});
+	  renderText(playbackText, 10.f, screenHeight - 100.f, 0.3f, vec3{1.f, 1.f, 1.f});
 
 	  //log("print this ");
 	  //log("and print this\n");
 
-	  renderText(logText, 10.f, screenHeight - 100.f, 0.4f, vec3{1.f, 1.f, 1.f});
+	  renderText(logText, 10.f, screenHeight - 120.f, 0.4f, vec3{1.f, 1.f, 1.f});
+
+	  uint64 innerFrameEnd = SDL_GetPerformanceCounter();
+	  innerFrameTime = innerFrameEnd - innerFrameStart;
 
 	  //std::cout << ("print this " + "and this\n");
 

@@ -815,6 +815,59 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
   }
 
+
+
+
+  //
+  // Update Mirror Angle
+  //
+  
+  if(state->mirrorState == MIRROR_DRAGGABLE) {
+    
+    vec2 d;
+    if(memoryInfo->hexMode) {
+      d = mouse_coords - squareToHexGrid(state->mirrorFragmentAnchor);
+    } else {
+      d = mouse_coords - state->mirrorFragmentAnchor;
+    }
+    float theta  = atan2(d.y, d.x);
+    float mag = magnitude(d);
+
+    //
+    // Calculate which mirror angle is closest to mouse,
+    // aka, set mirrorFragmentAngle
+    // Then calculate fragment magnitude
+    //
+
+
+    if(memoryInfo->hexMode) {
+
+      int closestAngle = (int) floor(6.f/PI * (theta + PI/12));
+      state->hexMirrorAngleId = (closestAngle + 12) % 6;
+
+      float snapAngle = PI/6.f * state->hexMirrorAngleId;
+      state->mirrorFragmentMag = mag * cos(snapAngle - theta);
+
+      //std::cout << "Closest angle : "<<closestAngle <<
+      //	" Mirror angle : "<<state->hexMirrorAngleId<<"\n";
+
+
+    } else {
+
+      int closestAngle = (int) floor(4/PI * (theta + PI/8));
+      state->mirrorFragmentAngle = (Angle) ((closestAngle + 8) % 4);
+
+      float snapAngle = PI/4.f * state->mirrorFragmentAngle;    
+      state->mirrorFragmentMag = mag * cos(snapAngle - theta); 
+    }    
+  }
+ 
+
+
+
+
+
+  
   //Background
   renderObject *renderMemory = renderMemoryInfo->memory;
   *renderMemory = renderObject {BACKGROUND, identity4, viewResult.view};
@@ -854,15 +907,13 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	model.xw -= 0.5f;
 	model.yy *= -1;
       }
-      
-      
+            
     } else {
 
       model.xw = (float) levelInfo->tiles[i].xid;
       model.yw = (float) levelInfo->tiles[i].yid;
 
     }
-    
     
     *renderMemory = renderObject {FLOOR_TILE, model, viewResult.view};
     if(levelInfo->tiles[i].type == 2) {
@@ -873,7 +924,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     renderMemory++;
   }
 
-#if 1
+
+  
   //Player
   {
     mat4 model = identity4;
@@ -909,41 +961,17 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
     renderMemory++; 
   }
-#endif
 
+
+
+
+
+  
   //Anchors
-  /**
-  int isOdd = (state->mirrorFragmentAnchor.y % 2);	    
-  ivec2 targetVec = {};
-  ivec2 targetVecReverse= {};
-  if(memoryInfo->hexMode) {
 
-    switch(state->hexMirrorAngleId) {
-    case 0:
-      targetVec = ivec2{1,0};
-      targetVecReverse = targetVec;
-      break;
-    case 1:
-      targetVec = ivec2{1 + isOdd, 1};
-      break;
-    case 2:
-      targetVec = ivec2{isOdd, 1};
-      break;
-    case 3:
-      targetVec = ivec2{0, 2};
-      targetVecReverse = targetVec;
-      break;
-    case 4:
-      targetVec = ivec2{-1+isOdd,1};
-      break;
-    case 5:
-      targetVec = ivec2{-2+isOdd,1};
-      break;
-    default:
-      assert(false);
-    }
-  }
-  **/  
+
+  //NOTE: this var is used to determine if valid mirror on mouse release
+  bool passesThroughAnchor = false; 
 
   for(int yid=0; yid<BOARD_HEIGHT; yid++) {
     for(int xid=0; xid<BOARD_WIDTH; xid++) {
@@ -973,8 +1001,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	  
 	}
 
-
-
 	if(state->mirrorState==MIRROR_DRAGGABLE || state->mirrorState==MIRROR_LOCKED) {
 	  bool isTheAnchor = (ivec2{xid,yid} == state->mirrorFragmentAnchor);
 	  bool passesThroughLine = false;
@@ -986,6 +1012,9 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	  if(memoryInfo->hexMode) {
 
+	    //NOTE: hexAnchor, hexPoint, and diff are not in the same coordinate
+	    //system used by squareToHexGrid. They are in a unique coord
+	    //system useful for finding a valid angle from two points
 	    ivec2 hexAnchor = state->mirrorFragmentAnchor;
 	    hexAnchor.x *= 2;
 	    if(state->mirrorFragmentAnchor.y % 2 == 1) {
@@ -996,19 +1025,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	    if(yid % 2 == 1) {
 	      hexPoint.x += 1;
 	    }
-
-
+	    
 	    ivec2 diff = hexPoint - hexAnchor;
+	    
 	    int mirrorId = state->hexMirrorAngleId;
-
-	    vec2 mirrorFragRelative = {
-	      state->mirrorFragmentMag * cos(state->hexMirrorAngleId * PI/6),
-	      state->mirrorFragmentMag * sin(state->hexMirrorAngleId * PI/6),
-	    };
-	    vec2 mirrorFrag = squareToHexGrid(state->mirrorFragmentAnchor)
-					      + mirrorFragRelative;
-	    vec2 pointFrag = squareToHexGrid(point) - squareToHexGrid(state->mirrorFragmentAnchor);
-
 
 	    if( (mirrorId==0 && diff.y==0) ||
 	        (mirrorId==3 && diff.x==0) ||
@@ -1026,34 +1046,33 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 		 (float)diff.x / -3.f == (float)diff.y / 1.f)
 		
 	       ){
-
-	      //if(dot(mirrorFrag, pointFrag) > 0) {
-
-	      //if(magnitude(pointFrag) < state->mirrorFragmentMag) {
-
-	      vec2 mirrorAnchor = squareToHexGrid(state->mirrorFragmentAnchor);
-	      vec2 mirrorEnd = mirrorFrag;
 	      
-	      float leftBound = min(mirrorAnchor.x, mirrorEnd.x);
-	      float rightBound = max(mirrorAnchor.x, mirrorEnd.x);
-	      float bottomBound = min(mirrorAnchor.y, mirrorEnd.y);
-	      float topBound = max(mirrorAnchor.y, mirrorEnd.y);
+	      vec2 mirrorAnchor = squareToHexGrid(state->mirrorFragmentAnchor);
+	      vec2 mirrorFragRelative = {
+		state->mirrorFragmentMag * cos(state->hexMirrorAngleId * PI/6),
+		state->mirrorFragmentMag * sin(state->hexMirrorAngleId * PI/6),
+	      };
+	      vec2 mirrorFrag = squareToHexGrid(state->mirrorFragmentAnchor)
+		+ mirrorFragRelative;
+	      	      
+	      float leftBound = min(mirrorAnchor.x, mirrorFrag.x);
+	      float rightBound = max(mirrorAnchor.x, mirrorFrag.x);
+	      float bottomBound = min(mirrorAnchor.y, mirrorFrag.y);
+	      float topBound = max(mirrorAnchor.y, mirrorFrag.y);
 	      
 	      vec2 p = squareToHexGrid(point);
 
-	      std::printf("L %f R %f B %f T %f Px %f Py %f\n",
-			  leftBound,rightBound,bottomBound,topBound,p.x,p.y);
-	      
+	      //std::printf("L %f R %f B %f T %f Px %f Py %f\n",
+	      //leftBound,rightBound,bottomBound,topBound,p.x,p.y);	      
 
 	      if( (mirrorId==3 || (p.x > leftBound && p.x < rightBound)) &&
 		  (mirrorId==0 || (p.y > bottomBound && p.y < topBound)) ) {
 		 
-
 		passesThroughLine = true;
+		
+		passesThroughAnchor = true;
 	      }
-		//}
-		//}
-
+	      
 	    }
 	    
 	      
@@ -1076,6 +1095,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 		 && pointCoordDot > 0) {
 	           
 		passesThroughLine = true;
+
+		passesThroughAnchor = true;
 	      }	    
 							    
 	    }	    
@@ -1121,47 +1142,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
   
   //Mirror
-
-  if(state->mirrorState == MIRROR_DRAGGABLE) {
-    
-    vec2 d;
-    if(memoryInfo->hexMode) {
-      d = mouse_coords - squareToHexGrid(state->mirrorFragmentAnchor);
-    } else {
-      d = mouse_coords - state->mirrorFragmentAnchor;
-    }
-    float theta  = atan2(d.y, d.x);
-    float mag = magnitude(d);
-
-    //
-    // Calculate which mirror angle is closest to mouse,
-    // aka, set mirrorFragmentAngle
-    // Then calculate fragment magnitude
-    //
-
-
-    if(memoryInfo->hexMode) {
-
-      int closestAngle = (int) floor(6.f/PI * (theta + PI/12));
-      state->hexMirrorAngleId = (closestAngle + 12) % 6;
-
-      float snapAngle = PI/6.f * state->hexMirrorAngleId;
-      state->mirrorFragmentMag = mag * cos(snapAngle - theta);
-
-      //std::cout << "Closest angle : "<<closestAngle <<
-      //	" Mirror angle : "<<state->hexMirrorAngleId<<"\n";
-
-
-    } else {
-
-      int closestAngle = (int) floor(4/PI * (theta + PI/8));
-      state->mirrorFragmentAngle = (Angle) ((closestAngle + 8) % 4);
-
-      float snapAngle = PI/4.f * state->mirrorFragmentAngle;    
-      state->mirrorFragmentMag = mag * cos(snapAngle - theta); 
-    }    
-  }
-
    
   if(controller.mouseLeft.transitionCount && controller.mouseLeft.endedDown) {
     //
@@ -1195,46 +1175,18 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     //
     
     if(state->mirrorState == MIRROR_DRAGGABLE) {
-
-      bool passesThroughAnchor = false;
-
-      for(int yid=0; yid < (levelInfo->level_height+1); yid++) {
-	for(int xid=0; xid < (levelInfo->level_width+1); xid++) {
-	  if(levelInfo->board[yid][xid] == 1) {
-
-	    ivec2 point = {xid, yid};
-	    ivec2 coord1 = state->mirrorFragmentAnchor;
-	    //TODO: find more accurate way of representing coord2?
-	    vec2 coord2 = state->mirrorFragmentAnchor + state->mirrorFragmentMag * toVec(state->mirrorFragmentAngle);
-	          
-	    Angle current_to_coord;
-	    vec2 pointToCoord = point - coord1;
-	    bool pointToCoordValid = classifyVector(&current_to_coord, point - coord1);
-	          	      
-	    if(pointToCoordValid) {
-	      float pointToCoordLength = magnitude(point-coord1);
-	      float pointCoordDot = dot(point-coord1, coord2-coord1);
-	          	    
-	      if(state->mirrorFragmentAngle == current_to_coord
-		 && abs(state->mirrorFragmentMag) > pointToCoordLength
-		 && pointCoordDot > 0) {
-	          	           
-		passesThroughAnchor = true;
-		break;
-	      }
-	    }
-	  }
-	}
-      }
-      	    
-            
+      
       if(passesThroughAnchor) {
+	
 	state->mirrorState = MIRROR_LOCKED;
 	state->mirrorTimeElapsed = 0.f;
-	if(memoryInfo->hexMode) {
-	  reflectAlongHexMode(state, state->mirrorFragmentAnchor, state->mirrorFragmentAngle);	  
+
+	if(memoryInfo->hexMode) {  
+	  reflectAlongHexMode(state, state->mirrorFragmentAnchor,
+			      state->mirrorFragmentAngle);	  
 	} else {
-	  reflect_along(state, state->mirrorFragmentAnchor, state->mirrorFragmentAngle);
+	  reflect_along(state, state->mirrorFragmentAnchor,
+			state->mirrorFragmentAngle);
 	}
        
       } else {
@@ -1276,19 +1228,18 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
       float theta = (float)state->hexMirrorAngleId * PI/6.f;
-      theta = fmod(theta + 4*PI, 2*PI);
+      theta = fmod(theta + 4*PI, PI);
 
       float xdir = cos(theta);
       float ydir = sin(theta);
       //std::cout << "Theta "<<theta<<" Mirror dir "<< xdir<<" "<<ydir<<"\n";
 
-
       vec2 mirrorDir = vec2 {xdir, ydir};
       
-      mirrorExtension = extensionMag * mirrorDir;
+      mirrorExtension = extensionMag * magSign * mirrorDir;
       diff = state->mirrorFragmentMag * mirrorDir;
 
-      vec2 diffToMouse = mouse_coords-squareToHexGrid(state->mirrorFragmentAnchor);
+      //vec2 diffToMouse =mouse_coords-squareToHexGrid(state->mirrorFragmentAnchor);
 
       /*
       std::cout << "Mag target "<<state->mirrorFragmentMag<<
@@ -1321,7 +1272,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     
     x2 = x1 + diff.x + 1.5f * mirrorExtension.x;
     y2 = y1 + diff.y + 1.5f * mirrorExtension.y;
-    // printf("Mirror segment: (%i, %i) to (%i, %i) Thickness dir: (%f, %f)\n", x1, y1, x2, y2, thickness_offset_dir.x, thickness_offset_dir.y);
+    //std::printf("Mirror segment: (%f, %f) to (%f, %f) Thickness dir: (%f, %f)\n", x1, y1, x2, y2, thickness_offset_dir.x, thickness_offset_dir.y);
       
     float thickness = 0.05f;
 
@@ -1341,7 +1292,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
     mirror_vertices[9] = x2 + thickness_offset_dir.x * thickness;
     mirror_vertices[10] = y2 + thickness_offset_dir.y * thickness;
-    mirror_vertices[11] = 0;    
+    mirror_vertices[11] = 0;
 
 
     memoryInfo->updateRenderContextVertices(MIRROR, mirror_vertices, 12);
@@ -1359,11 +1310,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //Make sure that we didn't overuse memory in our render buffer
   assert(renderMemory - renderMemoryInfo->memory < renderMemoryInfo->count);
 
-  /**
-  std::cout << "Mirror state: " << mirrorState << "\n";
-  std::cout << "Current time: " << input.currentTime << "\n";
-  std::cout << "Weight: "<< weight << "\n";
-  **/
+
+  //std::cout << "Mirror state: " << state->mirrorState << "\n";
+  //std::cout << "Current time: " << input.currentTime << "\n";
+  //std::cout << "Weight: "<< state->weight << "\n";
+
 
 }
 
