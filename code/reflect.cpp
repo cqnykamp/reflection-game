@@ -1,4 +1,4 @@
-//TODO: use aliases for game state structs on some functions
+//TODO: use aliases for game state structs on some functions?
 
 #include "reflect.h"
 #include "gameutil.cpp"
@@ -74,6 +74,7 @@ struct LevelState {
 
 
   mat3 hexBasis;
+  mat3 hexTargetBasis;
   int hexMirrorAngleId;
   
 };
@@ -94,6 +95,14 @@ float customMod(float num, float base) {
 }
 
 
+void printMat3(mat3 m ) {
+  std::printf("%f %f %f \n%f %f %f \n%f %f %f \n",
+	      m.xx, m.xy, m.xz,
+	      m.yx, m.yy, m.yz,
+	      m.zx, m.zy, m.zz); 
+}
+
+
 void * claimMemory(void **existingMemoryBuffer, int bytes) {
   void *myNewMemory = *existingMemoryBuffer;
   *existingMemoryBuffer = (void*)((char*)(*existingMemoryBuffer) + bytes);
@@ -101,15 +110,42 @@ void * claimMemory(void **existingMemoryBuffer, int bytes) {
 }
 
 
-vec2 squareToHexGrid(vec2 squareCoords) {
-  float hexY = squareCoords.y; // * sqrt(0.75f);
+
+
+ivec2 hexBoardToLinearSpace(ivec2 coords) {
+
+  ivec2 linearCoords = coords;
+  linearCoords.x *= 2;
+  if(coords.y % 2 == 1) {
+    linearCoords.x += 1;
+  }
+  return linearCoords;
+}
+
+vec2 hexLinearSpaceToRenderSpace(vec2 coords) {
+  vec2 newCoords = (vec2) coords;
+  newCoords.x *= 0.5;
+  newCoords.y *= sqrt(0.75f);
+  return newCoords;
+}
+
+vec2 hexBoardToRenderSpace(ivec2 squareCoords) {
+
+  return hexLinearSpaceToRenderSpace(hexBoardToLinearSpace(squareCoords));
+    
+				     
+  
+
+  /**float hexY = squareCoords.y; // * sqrt(0.75f);
 
   vec2 newCoords = vec2 {
     squareCoords.x + 0.5f * abs( customMod(hexY - 1.f, 2.f) - 1.f),
     hexY * sqrt(0.75f)
   };
   return newCoords;
+  **/
 }
+
 
 
 //
@@ -164,7 +200,7 @@ ivec2 nearestAnchor(LevelInfo *levelInfo, vec2 point, bool hexMode) {
 
 	vec2 myVec = vec2{(float)xid, (float)yid};
 	if(hexMode) {
-	  myVec = squareToHexGrid(myVec);
+	  myVec = hexBoardToRenderSpace(ivec2{xid,yid});
 	}
 
 	float current_dist = magnitude(point - myVec);
@@ -185,7 +221,7 @@ bool isNearbyAnchor(LevelInfo *levelInfo, vec2 coord, float maxAcceptableDistanc
 
       vec2 thisVec = vec2{(float)xid, (float)yid};
       if(hexMode) {
-	thisVec = squareToHexGrid(thisVec);
+	thisVec = hexBoardToRenderSpace(ivec2{xid,yid});
       }
       
       if(levelInfo->board[yid][xid] == 1
@@ -197,7 +233,88 @@ bool isNearbyAnchor(LevelInfo *levelInfo, vec2 coord, float maxAcceptableDistanc
   return false;
 }
 
-void reflectAlongHexMode(LevelState *state, ivec2 anchor, Angle angle) {
+mat3 rotate(float theta) {
+  return mat3 {
+    cos(theta), -sin(theta), 0.f,
+    sin(theta),  cos(theta), 0.f,
+    0.f,         0.f,        1.f
+  };
+}
+
+void reflectAlongHexMode(LevelState *state, ivec2 anchor, int angle) {
+
+  //TODO: make reflection discrete (instead of using floating point nums)
+  //Otherwise, we might lose precision as we do more reflections
+
+
+
+  ivec2 hexAnchor = hexBoardToLinearSpace(anchor);
+
+  imat3 shiftAnchorToCenter = {
+    1, 0, -hexAnchor.x,
+    0, 1, -2*hexAnchor.y,
+    0, 0, 1
+  };
+  
+  imat3 shiftAnchorBack = {
+    1, 0, hexAnchor.x,
+    0, 1, hexAnchor.y / 2,
+    0, 0, 1
+  };
+
+
+  imat3 r = identity3i;
+  if(angle == 0) {
+    r = {
+      1, 0, 0,
+      0, -1, 2*hexAnchor.y,
+      0, 0, 1
+    };
+  }
+
+  //mat3 reflectMatrix = shiftAnchorBack * r * shiftAnchorToCenter;
+  mat3 reflectMatrix = r;
+  //mat3 reflectMatrix = shiftAnchorToCenter;
+
+  /*
+  vec2 hexAnchor = hexBoardToRenderSpace(anchor);
+  float theta = -PI * (float)angle / 6.f;
+  
+  mat3 shiftAnchorToCenter = {
+    1.f, 0.f, -hexAnchor.x,
+    0.f, 1.f, -hexAnchor.y,
+    0.f, 0.f, 1.f
+  };
+  mat3 shiftAnchorBack = {
+    1.f, 0.f, hexAnchor.x,
+    0.f, 1.f, hexAnchor.y,
+    0.f, 0.f, 1.f
+  };  
+  mat3 flipY = {
+    1.f, 0.f, 0.f,
+    0.f, -1.f, 0.f,
+    0.f, 0.f, 1.f
+  };
+
+  mat3 reflectMatrix = (shiftAnchorBack *
+		   rotate(-theta) *
+		   flipY *
+		   rotate(theta) *
+		   shiftAnchorToCenter);
+
+  */
+  
+  state->hexTargetBasis = reflectMatrix * state->hexTargetBasis;
+
+
+  std::cout << "Reflect matrix\n";
+  printMat3(reflectMatrix);
+  std::cout << "Hex basis\n";
+  printMat3(state->hexBasis);
+  std::cout << "Hex target basis\n";
+  printMat3(state->hexTargetBasis);
+
+  
   state->is_animation_active = true;
   state->weight = 0;
   
@@ -376,7 +493,9 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
 
   LoadedLevel *levelData = (LoadedLevel *) claimMemory(&tempMemory, sizeof(LoadedLevel));
   memoryInfo->loadLevelFromFile(level_num, levelData);
-  
+
+
+  //Points
   int8 xid=0;
   int8 yid=0;
   for(int i=0; i < levelData->pointDataCount; i++) {
@@ -402,6 +521,8 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
   }
 
 
+
+  //Tiles
   xid = 0;
   yid = 0;
   levelInfo->activeTiles = 0;
@@ -417,15 +538,40 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
 	levelInfo->activeTiles++;
 	
       } else if(thisVal == 3) { // Player tile
-	levelInfo->tiles[levelInfo->activeTiles] = Tile {xid, yid, 1}; //regular tile from board's perspective
+	//regular tile from board's perspective	
+	levelInfo->tiles[levelInfo->activeTiles] = Tile {xid, yid, 1}; 
 	levelInfo->activeTiles++;
 
 	if(hasFoundPlayer) {
 	  levelInfo->secondPlayerStartPos = {xid, yid};
+	  //TODO: second player hex pos
 	  levelInfo->hasSecondPlayer = true;
+	  
 	} else {
-	  hasFoundPlayer = true;
+	  hasFoundPlayer = true;	  
 	  levelInfo->player_pos_original = {xid, yid};
+
+
+	  if(memoryInfo->hexMode) {
+
+
+	    //TODO: fix player positioning?
+	    
+	    levelInfo->player_pos_original =
+	      hexBoardToLinearSpace(levelInfo->player_pos_original);
+
+	    /**
+	    levelInfo->player_pos_original.x = (int)
+	      ((float)levelInfo->player_pos_original.x * 0.5f);
+	    if(levelInfo->player_pos_original.y % 2 == 0) {
+	      levelInfo->player_pos_original.x += 1;
+
+	    }
+	    **/
+
+
+	  }
+
 	}
 
       }
@@ -456,7 +602,22 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
   state->basis = identity3i;
 
   state->hexBasis = identity3f;
+  //state->hexBasis.xx = 2;
+  
+  state->hexTargetBasis = state->hexBasis;
 
+  std::cout << "Hex basis\n";
+  printMat3(state->hexBasis);
+  std::cout << "Hex target basis\n";
+  printMat3(state->hexTargetBasis);
+  std::printf("Player pos orig: (%i, %i)\n",
+	      levelInfo->player_pos_original.x,
+	      levelInfo->player_pos_original.y);
+
+
+  std::printf("Player pos render space:\n");
+  vec2 playerRenderPos = hexLinearSpaceToRenderSpace(levelInfo->player_pos_original);
+  std::printf("(%f, %f)\n", playerRenderPos.x, playerRenderPos.y);
 }
 
 
@@ -466,8 +627,16 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
 void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, LevelState *state, uint32 time) {
 
   // Update game state
-  state->basis = state->target_basis;
+  if(memoryInfo->hexMode) {
+    state->hexBasis = state->hexTargetBasis;
 
+    
+  } else {
+  
+    state->basis = state->target_basis;
+  }
+
+  
   ivec2 player_lower_left = {10000, 10000};
   ivec2 secondPlayerLowerLeft = {10000, 10000};
   for(int yshift=0; yshift<2; yshift++) {
@@ -628,19 +797,21 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
 
 
     if(hexMode) {
-    float pad = 0.1f;
+      float pad = 0.1f;
 
-    float player_vertices[] = {
-      sqrt(3.f) * pad, 0.f + pad, 0.f, //left
-      1.0f - sqrt(3.f) * pad, 0.f + pad, 0.f, //right
-      0.5f, 1.5f / sqrt(3.f) - pad * 2.0f, 0.f //bottom      
-    };
-    unsigned int player_indices[] = {
-      0, 1, 2
-    };
+      float player_vertices[] = {
+	sqrt(3.f) * pad,        0.f + pad,                  0.f, //left
+	1.0f - sqrt(3.f) * pad, 0.f + pad,                  0.f, //right
+	0.5f,                   1.5f / sqrt(3.f) - 2.f*pad, 0.f //bottom
+      };
 
-    createNewRenderObject(player_vertices, 9, player_indices, 3,
-			  "shaders/player.shader", PLAYER);
+    
+      unsigned int player_indices[] = {
+	0, 1, 2
+      };
+
+      createNewRenderObject(player_vertices, 9, player_indices, 3,
+			    "shaders/player.shader", PLAYER);
 
 
     } else {
@@ -790,7 +961,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     state->sleep_active = false;
 
     if(memoryInfo->hexMode) {
-      reflectAlongHexMode(state, state->mirrorFragmentAnchor, state->mirrorFragmentAngle);
+      reflectAlongHexMode(state, state->mirrorFragmentAnchor, state->hexMirrorAngleId);
     } else {
       reflect_along(state, state->mirrorFragmentAnchor, state->mirrorFragmentAngle);
     }
@@ -800,7 +971,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   state->mirrorTimeElapsed += input.deltaTime;
 
   
-  mat3 animation_basis = state->target_basis;
+  mat3 animation_basis;
+
+  if(memoryInfo->hexMode) {
+    animation_basis = state->hexTargetBasis;
+  } else {
+    animation_basis  = state->target_basis;
+  }
+
+    
   if(state->is_animation_active) {
     state->weight += 0.0025f * input.deltaTime;
 
@@ -809,8 +988,18 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       onPlayerMovementFinished(memoryInfo, levelInfo, state, input.currentTime);	
     } else {
       //Lerp basis
-      animation_basis  = state->basis * mat3() * (1.0f-state->weight)
-	+ state->target_basis * mat3() * (state->weight);
+
+      if(memoryInfo->hexMode) {
+
+	animation_basis  = state->hexBasis * mat3() * (1.0f-state->weight)
+	  + state->hexTargetBasis * mat3() * (state->weight);
+	  
+
+      } else {
+      
+	animation_basis  = state->basis * mat3() * (1.0f-state->weight)
+	  + state->target_basis * mat3() * (state->weight);
+      }
     }
 
   }
@@ -826,7 +1015,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     
     vec2 d;
     if(memoryInfo->hexMode) {
-      d = mouse_coords - squareToHexGrid(state->mirrorFragmentAnchor);
+      d = mouse_coords - hexBoardToRenderSpace(state->mirrorFragmentAnchor);
     } else {
       d = mouse_coords - state->mirrorFragmentAnchor;
     }
@@ -890,8 +1079,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       int numInXid = levelInfo->tiles[i].xid % 2;
       float yid = (float)levelInfo->tiles[i].yid;
 
-      vec2 hexCoords = squareToHexGrid(vec2{(float)overlappingXid, yid});
-   
+      //vec2 hexCoords = hexBoardToRenderSpace(vec2{(float)overlappingXid, yid});
+      vec2 hexCoords =
+	hexLinearSpaceToRenderSpace(hexBoardToLinearSpace(ivec2{overlappingXid, levelInfo->tiles[i].yid}));
+
       bool flipped = false;
       if(levelInfo->tiles[i].yid % 2 == 1) {
 	flipped = !flipped;
@@ -929,36 +1120,71 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //Player
   {
     mat4 model = identity4;
+    mat3 basis = identity3f;
 
     if(memoryInfo->hexMode) {
-      vec2 hexCoords = squareToHexGrid(levelInfo->player_pos_original);
+
+      //vec2 hexPos = hexBoardToLinearSpace(levelInfo->player_pos_original);
+      
+      vec2 hexCoords = hexLinearSpaceToRenderSpace(levelInfo->player_pos_original);
+      //vec2 hexCoords = levelInfo->player_pos_original;
+      
       model.xw = hexCoords.x;
       model.yw = hexCoords.y;
+
+      assert(animation_basis.zx == 0);
+      assert(animation_basis.zy == 0);
+      assert(animation_basis.zz == 1);
+
+      vec2 xcol = vec2{animation_basis.xx, animation_basis.yx};
+      //xcol = hexLinearSpaceToRenderSpace(xcol);
+      vec2 ycol = vec2{animation_basis.xy, animation_basis.yy};
+      //ycol = hexLinearSpaceToRenderSpace(ycol);
+      vec2 zcol = vec2{animation_basis.xz, animation_basis.yz};
+      //zcol = hexLinearSpaceToRenderSpace(zcol);
+
+      //std::printf("X: (%f,%f) Y: (%f,%f) Z:(%f,%f)\n", xcol.x, xcol.y, ycol.x, ycol.y, zcol.x, zcol.y);
+      
+      basis = {
+	xcol.x, ycol.x, zcol.x,
+	xcol.y, ycol.y, zcol.y,
+	0, 0, 1
+      };
+
+      //basis = animation_basis;
+
+      //std::cout << "Basis\n";
+      //printMat3(basis);
 
     } else {
       model.xw = (float) levelInfo->player_pos_original.x;
       model.yw = (float) levelInfo->player_pos_original.y;
+      basis = animation_basis;
     }
     
-    *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
+    *renderMemory = renderObject {PLAYER, model, viewResult.view, basis};
     renderMemory++;
   }
   
   //Second player
   if(levelInfo->hasSecondPlayer) {
     mat4 model = identity4;
+    mat3 basis = identity3f;
 
     if(memoryInfo->hexMode) {
-      vec2 hexCoords = squareToHexGrid(levelInfo->secondPlayerStartPos);
+      vec2 hexCoords = hexBoardToRenderSpace(levelInfo->secondPlayerStartPos);
       model.xw = hexCoords.x;
-      model.yw = hexCoords.y;    
+      model.yw = hexCoords.y;
+
+      //TODO: basis
 
     } else {
       model.xw = (float) levelInfo->secondPlayerStartPos.x;
       model.yw = (float) levelInfo->secondPlayerStartPos.y;
+      basis = animation_basis;
     }
     
-    *renderMemory = renderObject {PLAYER, model, viewResult.view, animation_basis};
+    *renderMemory = renderObject {PLAYER, model, viewResult.view, basis};
     renderMemory++; 
   }
 
@@ -984,7 +1210,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	  if(memoryInfo->hexMode) {
 
-	    vec2 hexVec = squareToHexGrid(myVec);
+	    vec2 hexVec = hexBoardToRenderSpace(myVec);
 	    if(nearestAnchor(levelInfo, mouse_coords, true) == myVec
 	       && magnitude(mouse_coords - hexVec) < MOUSE_HOVER_SNAP_DIST) {
 	      highlight_key = 1;
@@ -1012,19 +1238,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	  if(memoryInfo->hexMode) {
 
-	    //NOTE: hexAnchor, hexPoint, and diff are not in the same coordinate
-	    //system used by squareToHexGrid. They are in a unique coord
-	    //system useful for finding a valid angle from two points
-	    ivec2 hexAnchor = state->mirrorFragmentAnchor;
-	    hexAnchor.x *= 2;
-	    if(state->mirrorFragmentAnchor.y % 2 == 1) {
-	      hexAnchor.x += 1;
-	    }
-
-	    ivec2 hexPoint = {2*xid, yid};
-	    if(yid % 2 == 1) {
-	      hexPoint.x += 1;
-	    }
+	    ivec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+	    ivec2 hexPoint = hexBoardToLinearSpace(point);
 	    
 	    ivec2 diff = hexPoint - hexAnchor;
 	    
@@ -1047,12 +1262,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 		
 	       ){
 	      
-	      vec2 mirrorAnchor = squareToHexGrid(state->mirrorFragmentAnchor);
+	      vec2 mirrorAnchor = hexBoardToRenderSpace(state->mirrorFragmentAnchor);
 	      vec2 mirrorFragRelative = {
 		state->mirrorFragmentMag * cos(state->hexMirrorAngleId * PI/6),
 		state->mirrorFragmentMag * sin(state->hexMirrorAngleId * PI/6),
 	      };
-	      vec2 mirrorFrag = squareToHexGrid(state->mirrorFragmentAnchor)
+	      vec2 mirrorFrag = hexBoardToRenderSpace(state->mirrorFragmentAnchor)
 		+ mirrorFragRelative;
 	      	      
 	      float leftBound = min(mirrorAnchor.x, mirrorFrag.x);
@@ -1060,7 +1275,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	      float bottomBound = min(mirrorAnchor.y, mirrorFrag.y);
 	      float topBound = max(mirrorAnchor.y, mirrorFrag.y);
 	      
-	      vec2 p = squareToHexGrid(point);
+	      vec2 p = hexBoardToRenderSpace(point);
 
 	      //std::printf("L %f R %f B %f T %f Px %f Py %f\n",
 	      //leftBound,rightBound,bottomBound,topBound,p.x,p.y);	      
@@ -1113,7 +1328,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	mat4 anchorModel = identity4;
 
 	if(memoryInfo->hexMode) {
-	  vec2 hexCoords = squareToHexGrid(vec2{(float)xid, (float)yid});
+	  vec2 hexCoords = hexBoardToRenderSpace(ivec2{xid,yid});
 	  anchorModel.xw = hexCoords.x;
 	  anchorModel.yw = hexCoords.y;
 
@@ -1183,7 +1398,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	if(memoryInfo->hexMode) {  
 	  reflectAlongHexMode(state, state->mirrorFragmentAnchor,
-			      state->mirrorFragmentAngle);	  
+			      state->hexMirrorAngleId);	  
 	} else {
 	  reflect_along(state, state->mirrorFragmentAnchor,
 			state->mirrorFragmentAngle);
@@ -1239,7 +1454,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       mirrorExtension = extensionMag * magSign * mirrorDir;
       diff = state->mirrorFragmentMag * mirrorDir;
 
-      //vec2 diffToMouse =mouse_coords-squareToHexGrid(state->mirrorFragmentAnchor);
+      //vec2 diffToMouse =mouse_coords-hexBoardToRenderSpace(state->mirrorFragmentAnchor);
 
       /*
       std::cout << "Mag target "<<state->mirrorFragmentMag<<
@@ -1259,7 +1474,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
     if(memoryInfo->hexMode) {
 
-      vec2 hexAnchor = squareToHexGrid(state->mirrorFragmentAnchor);
+      vec2 hexAnchor = hexBoardToRenderSpace(state->mirrorFragmentAnchor);
 
       x1 = hexAnchor.x - mirrorExtension.x;
       y1 = hexAnchor.y - mirrorExtension.y;
