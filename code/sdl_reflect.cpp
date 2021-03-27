@@ -38,7 +38,6 @@ unsigned int ebo[MAX_RENDER_TYPES];
 unsigned int shader[MAX_RENDER_TYPES];
 unsigned int indicesCount[MAX_RENDER_TYPES];
 
-
 unsigned int fontShader;
 unsigned int fontVao;
 unsigned int fontVbo;
@@ -353,6 +352,14 @@ UPDATE_RENDER_CONTEXT_VERTICES(updateRenderContextVertices) {
 
 
 void renderText(std::string text, float x, float y, float scale, vec3 color) {
+
+  mat4 projectionInverse = mat4 {
+    (float)screenWidth / 2.f, 0.f,                     0.f, (float)screenWidth/2.f,
+    0.f,                      (float)screenHeight/2.f, 0.f, (float)screenHeight/2.f,
+    0.f,                      0.f,                     1.f, 0.f,
+    0.f,                      0.f,                     0.f, 1.f
+  };
+  
   
   glUseProgram(fontShader);
   glUniform3f(glGetUniformLocation(fontShader, "textColor"), color.x, color.y, color.z);
@@ -614,7 +621,9 @@ int CALLBACK  WinMain(
 	int16 *stream = (int16 *)malloc(audioStreamMaxSize);
 
 
-	//TODO: use open-source font
+
+	
+
 	//Fonts
 	FT_Library ft;
 	if(FT_Init_FreeType(&ft)) {
@@ -623,7 +632,7 @@ int CALLBACK  WinMain(
 	}
 	
 	FT_Face face;
-	if(FT_New_Face(ft, "arial.ttf", 0, &face)) {
+	if(FT_New_Face(ft, "arial.ttf", 0, &face)) { 	//TODO: use open-source font
 	  std::cout << "ERROR::FREETYPE: Could not load font \n";
 	  return -1;	  
 	}
@@ -686,10 +695,19 @@ int CALLBACK  WinMain(
 	  0.f, 0.f, 1.f, 0.f,
 	  0.f, 0.f, 0.f, 1.f
 	};
+
+	mat4 projectionInverse = mat4 {
+	  (float)screenWidth / 2.f, 0.f,                     0.f, (float)screenWidth/2.f,
+	  0.f,                      (float)screenHeight/2.f, 0.f, (float)screenHeight/2.f,
+	  0.f,                      0.f,                     1.f, 0.f,
+	  0.f,                      0.f,                     0.f, 1.f
+	};
+
 	  
 	projection = transpose(projection);
 	glUniformMatrix4fv(glGetUniformLocation(fontShader, "projection"), 1, GL_FALSE, &projection.xx);
 
+	
 	uint64 timerFrequency = SDL_GetPerformanceFrequency();
 	uint64 prevTime = SDL_GetPerformanceCounter();
 
@@ -898,24 +916,41 @@ int CALLBACK  WinMain(
 	    renderObject obj = *(renderMemoryInfo.memory + i);
 
 	    if(obj.renderContext) { //aka if game has put something here
+
+
+	      if(obj.renderContext == TEXT) {
+
+		mat4 pos = projectionInverse * obj.view * obj.model;
+
+		renderText(obj.text,
+		pos.xw, pos.yw, 0.3f, vec3{1.f, 1.f, 1.f});
+
+	      } else {
+	      
 	    
-	      glBindVertexArray(vao[obj.renderContext]);
-	      glBindBuffer(GL_ARRAY_BUFFER, vbo[obj.renderContext]);
-	      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[obj.renderContext]);
-	      glUseProgram(shader[obj.renderContext]);
+		glBindVertexArray(vao[obj.renderContext]);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo[obj.renderContext]);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[obj.renderContext]);
+		glUseProgram(shader[obj.renderContext]);
 
-	      mat4 modelMatData = transpose(obj.model);
-	      glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "model"), 1, GL_FALSE, &modelMatData.xx);
-	      mat4 viewMatData = transpose(obj.view);
-	      glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "view"), 1, GL_FALSE, &viewMatData.xx);
-	      mat3 basisMatData = transpose(obj.basis);
-	      glUniformMatrix3fv(glGetUniformLocation(shader[obj.renderContext], "basis"), 1, GL_FALSE, &basisMatData.xx);
+		mat4 modelMatData = transpose(obj.model);
+		glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "model"),
+				   1, GL_FALSE, &modelMatData.xx);	      
+		mat4 viewMatData = transpose(obj.view);
+		glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "view"),
+				   1, GL_FALSE, &viewMatData.xx);
+		mat3 basisMatData = transpose(obj.basis);
+		glUniformMatrix3fv(glGetUniformLocation(shader[obj.renderContext], "basis"),
+				   1, GL_FALSE, &basisMatData.xx);
 
-	      glUniform1i(glGetUniformLocation(shader[obj.renderContext], "highlight_key"), obj.highlight_key);
-	      glUniform1f(glGetUniformLocation(shader[obj.renderContext], "alpha"), obj.alpha);
+		glUniform1i(glGetUniformLocation(shader[obj.renderContext],
+						 "highlight_key"), obj.highlight_key);
+		glUniform1f(glGetUniformLocation(shader[obj.renderContext],
+						 "alpha"), obj.alpha);
 
 	    
-	      glDrawElements(GL_TRIANGLES, indicesCount[obj.renderContext], GL_UNSIGNED_INT, 0);
+		glDrawElements(GL_TRIANGLES, indicesCount[obj.renderContext], GL_UNSIGNED_INT, 0);
+	      }
 
 	    }
 	    

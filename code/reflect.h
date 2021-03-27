@@ -36,7 +36,7 @@ typedef int32 bool32;
 typedef float real32;
 typedef double real64;
 
-
+#include <string>
 
 
 
@@ -54,12 +54,14 @@ struct LoadedLevel {
 
 enum RenderContext {
   //NOTE: 0 means nothing there, don't draw
-  PLAYER = 1,
-  BACKGROUND = 2,
-  FLOOR_TILE = 3,
-  FRONT_GRID = 4,
-  MIRROR = 5,
-  ANCHOR = 6,
+  TEXT = 1,
+  PLAYER = 2,
+  BACKGROUND = 3,
+  FLOOR_TILE = 4,
+  FRONT_GRID = 5,
+  MIRROR = 6,
+  ANCHOR = 7,
+
   //GOAL,
 };
 
@@ -75,7 +77,6 @@ typedef DEBUG_LOG(DebugLog);
 
 #define CREATE_NEW_RENDER_OBJECT(name) void name(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath, RenderContext context)
 typedef CREATE_NEW_RENDER_OBJECT(CreateNewRenderObject);
-
 
 
 
@@ -110,6 +111,7 @@ struct renderObject {
   mat3 basis;
   int highlight_key;
   float alpha;
+  std::string text;
 };
 
 

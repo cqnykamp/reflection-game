@@ -765,10 +765,9 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
     
     if(hexMode) {
       float floor_vertices[] = {
-	0.0f, 0.0f, 0.0f,
-	1.0f, 0.0f, 0.0f,
-	0.5f, sqrt(0.75f), 0.0f
-	//NOTE: these do not get affected by square to hex grid
+	-1.0f, 0.5f, 0.0f,
+	1.0f, 0.5f, 0.0f,
+	0.0f, -0.5f, 0.0f
       };
     
       unsigned int floor_indices[] = {
@@ -1067,8 +1066,9 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   for(int i=0; i<levelInfo->activeTiles; i++) {
     mat4 model = identity4;
 
-    if(memoryInfo->hexMode) {
+    ivec2 hexCoords;
 
+    if(memoryInfo->hexMode) {
       
       int overlappingXid;
       if(levelInfo->tiles[i].yid % 2 == 1) {
@@ -1080,8 +1080,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       float yid = (float)levelInfo->tiles[i].yid;
 
       //vec2 hexCoords = hexBoardToRenderSpace(vec2{(float)overlappingXid, yid});
-      vec2 hexCoords =
-	hexLinearSpaceToRenderSpace(hexBoardToLinearSpace(ivec2{overlappingXid, levelInfo->tiles[i].yid}));
+      hexCoords = hexBoardToLinearSpace(ivec2{
+	  levelInfo->tiles[i].xid,
+	  levelInfo->tiles[i].yid});
+      //std::printf("Hex coords: (%f, %f)\n", hexCoords.x, hexCoords.y);
+      
 
       bool flipped = false;
       if(levelInfo->tiles[i].yid % 2 == 1) {
@@ -1091,11 +1094,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	flipped = !flipped;
       }
 
-      model.xw = hexCoords.x;
-      model.yw = hexCoords.y;      
+      model.xw = (float)hexCoords.x;
+      model.yw = (float)hexCoords.y;
+
       if(flipped) {
-	model.yw += sqrt(0.75f);
-	model.xw -= 0.5f;
+	//model.yw += sqrt(0.75f);
+	//model.xw -= 0.5f;
 	model.yy *= -1;
       }
             
@@ -1113,6 +1117,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       renderMemory->highlight_key = 0;
     }
     renderMemory++;
+
+    char text[256];
+    sprintf_s(text, "(%i, %i)", hexCoords.x, hexCoords.y);
+
+    *renderMemory = renderObject{TEXT, model, viewResult.view, identity3f,0,0.f, text};
+
+    renderMemory++;
+
+    
   }
 
 
@@ -1345,9 +1358,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	}
 	*/
 
+	/**
 	*renderMemory = renderObject{ANCHOR, anchorModel, viewResult.view};
 	renderMemory->highlight_key = highlight_key;
 	renderMemory++;
+	**/
 	    
       }
     }
@@ -1514,6 +1529,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     *renderMemory = renderObject{MIRROR, identity4, viewResult.view};
     renderMemory->alpha = mirrorAlpha;
     renderMemory++;
+
     
   }
 
