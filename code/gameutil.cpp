@@ -236,10 +236,32 @@ struct mat4 {
   float yx; float yy; float yz; float yw;
   float zx; float zy; float zz; float zw;
   float wx; float wy; float wz; float ww;
+
+  mat4 translated(float x, float y, float z) {
+    return mat4 {
+      xx,xy,xz, xw + x,
+      yx,yy,yz, yw + y,
+      zx,zy,zz, zw + z,
+      wx,wy,wz,ww
+    };	      
+  }
+
+  mat4 translated(vec3 v) {
+    return translated(v.x, v.y, v.z);
+  }
+
+  mat4 translatedX(float x) {
+    return translated(x, 0.f, 0.f);
+  }
+  mat4 translatedY(float y) {
+    return translated(0.f, y, 0.f);
+  }
+  
 };
 
 
-const mat4 identity4 = mat4 {
+
+mat4 identity4 = mat4 {
   1.0f, 0.0f, 0.0f, 0.0f,
   0.0f, 1.0f, 0.0f, 0.0f,
   0.0f, 0.0f, 1.0f, 0.0f,
