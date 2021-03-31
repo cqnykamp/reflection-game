@@ -817,6 +817,7 @@ int CALLBACK  WinMain(
 		  mainController.rKey.transitionCount += 1;
 		  mainController.rKey.endedDown = (event.type==SDL_KEYUP);
 		}
+
 		if(scancode==SDL_SCANCODE_LEFT) {
 		  mainController.leftArrow.transitionCount += 1;
 		  mainController.leftArrow.endedDown = (event.type==SDL_KEYUP);
@@ -824,6 +825,10 @@ int CALLBACK  WinMain(
 		if(scancode==SDL_SCANCODE_RIGHT) {
 		  mainController.rightArrow.transitionCount += 1;
 		  mainController.rightArrow.endedDown = (event.type==SDL_KEYUP);
+		}
+
+		if(event.type==SDL_KEYDOWN && scancode==SDL_SCANCODE_D) {
+		  memory.debugTextActive = !memory.debugTextActive;
 		}
 
 		if(event.type==SDL_KEYDOWN &&
@@ -956,39 +961,45 @@ int CALLBACK  WinMain(
 	    
 	  }
 
-	  uint32 innerDeltaTime = (uint32) (1000.f*(float)innerFrameTime / (float)timerFrequency);	  
 
-	  if(currentTime > lastLabelTimestamp + 500) {
-	    frameDurationLabel = (int)deltaTime;
-	    innerFrameDurationLabel = (int)innerDeltaTime;
-	    lastLabelTimestamp = currentTime;
+
+	  if(memory.debugTextActive) {
+	    uint32 innerDeltaTime = (uint32) (1000.f*(float)innerFrameTime / (float)timerFrequency);	  
+
+	    if(currentTime > lastLabelTimestamp + 500) {
+	      frameDurationLabel = (int)deltaTime;
+	      innerFrameDurationLabel = (int)innerDeltaTime;
+	      lastLabelTimestamp = currentTime;
+	    }
+
+	    char fpsCounter[256];
+	    sprintf_s(fpsCounter, "Frame dur (ms): %i", frameDurationLabel);
+	    renderText(fpsCounter, 10.f, screenHeight - 20.f, 0.25f, vec3{1.f, 1.f, 1.f});
+
+	    char label[256];
+	    sprintf_s(label, "Inner dur (ms): %i",innerFrameDurationLabel);
+	    renderText(label, 10.f, screenHeight - 35.f, 0.25f, vec3{1.f, 1.f, 1.f});
+	  
+	    char frameCounter[256];
+	    sprintf_s(frameCounter, "Counter: %i ", counter);
+	    renderText(frameCounter, 10.f, screenHeight - 60.f, 0.3f, vec3{1.f, 1.f, 1.f});
+
+	    char recordingText[256];
+	    sprintf_s(recordingText, "Is recording: %i ", loopedCodeData.isRecording);
+	    renderText(recordingText, 10.f, screenHeight - 80.f, 0.3f, vec3{1.f, 1.f, 1.f});
+
+	    char playbackText[256];
+	    sprintf_s(playbackText, "Is playing back: %i ", loopedCodeData.isPlayingBack);
+	    renderText(playbackText, 10.f, screenHeight - 100.f, 0.3f, vec3{1.f, 1.f, 1.f});
+
+	    //log("print this ");
+	    //log("and print this\n");
+
+	    renderText(logText, 10.f, screenHeight - 120.f, 0.4f, vec3{1.f, 1.f, 1.f});
+
 	  }
 
-	  char fpsCounter[256];
-	  sprintf_s(fpsCounter, "Frame dur (ms): %i", frameDurationLabel);
-	  renderText(fpsCounter, 10.f, screenHeight - 20.f, 0.25f, vec3{1.f, 1.f, 1.f});
-
-	  char label[256];
-	  sprintf_s(label, "Inner dur (ms): %i",innerFrameDurationLabel);
-	  renderText(label, 10.f, screenHeight - 35.f, 0.25f, vec3{1.f, 1.f, 1.f});
-	  
-	  char frameCounter[256];
-	  sprintf_s(frameCounter, "Counter: %i ", counter);
-	  renderText(frameCounter, 10.f, screenHeight - 60.f, 0.3f, vec3{1.f, 1.f, 1.f});
-
-	  char recordingText[256];
-	  sprintf_s(recordingText, "Is recording: %i ", loopedCodeData.isRecording);
-	  renderText(recordingText, 10.f, screenHeight - 80.f, 0.3f, vec3{1.f, 1.f, 1.f});
-
-	  char playbackText[256];
-	  sprintf_s(playbackText, "Is playing back: %i ", loopedCodeData.isPlayingBack);
-	  renderText(playbackText, 10.f, screenHeight - 100.f, 0.3f, vec3{1.f, 1.f, 1.f});
-
-	  //log("print this ");
-	  //log("and print this\n");
-
-	  renderText(logText, 10.f, screenHeight - 120.f, 0.4f, vec3{1.f, 1.f, 1.f});
-
+	    
 	  uint64 innerFrameEnd = SDL_GetPerformanceCounter();
 	  innerFrameTime = innerFrameEnd - innerFrameStart;
 

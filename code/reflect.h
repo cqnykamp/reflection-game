@@ -119,6 +119,7 @@ struct gameMemory {
   bool isInitialized;
   bool isDllFirstFrame;
   bool hexMode;
+  bool debugTextActive;
   
   int permanentStorageSize;
   int temporaryStorageSize;

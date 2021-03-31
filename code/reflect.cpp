@@ -1184,11 +1184,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     }
     renderMemory++;
 
-
-    char text[256];
-    sprintf_s(text, "(%i,%i)->(%i,%i)", tile.xid, tile.yid,hexCoords.x, hexCoords.y);
-    *renderMemory = renderObject{TEXT, model.translatedX(-0.5f), viewResult.view, identity3f,0,0.f, text};
-    renderMemory++;
+    if(memoryInfo->debugTextActive) {
+      char text[256];
+      sprintf_s(text, "(%i,%i)->(%i,%i)", tile.xid, tile.yid,hexCoords.x, hexCoords.y);
+      *renderMemory = renderObject{TEXT, model.translatedX(-0.5f), viewResult.view, identity3f,0,0.f, text};
+      renderMemory++;
+    }
 
     
   }
@@ -1263,24 +1264,32 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
     
-    char text[256];
-
-    vec3 playerPosTemp = vec3{(float)hexCoords.x, (float)hexCoords.y, 1.f};
-    playerPosTemp = basis * playerPosTemp;
 
     //std::printf("Target player pos (%f, %f)\n", playerPosTemp.x, playerPosTemp.y);
     
-    mat4 textModel = identity4;
-    textModel.xw = playerPosTemp.x;
-    textModel.yw = playerPosTemp.y;
-    
-    sprintf_s(text, "(%i,%i)->(%i,%i)", boardPos.x, boardPos.y ,hexCoords.x, hexCoords.y);
-    *renderMemory = renderObject{TEXT, textModel.translatedX(-0.5f), viewResult.view, identity3f,0,0.f, text};
-    renderMemory++;
 
-    sprintf_s(text, "(%f,%f)", playerPosTemp.x, playerPosTemp.y);
-    *renderMemory = renderObject{TEXT, textModel.translated(-0.5f, 0.3f, 0.f), viewResult.view, identity3f,0,0.f, text};
-    renderMemory++;
+    if(memoryInfo->debugTextActive) {
+
+      char text[256];
+
+      vec3 playerPosTemp = vec3{(float)hexCoords.x, (float)hexCoords.y, 1.f};
+      playerPosTemp = basis * playerPosTemp;
+
+
+      mat4 textModel = identity4;
+      textModel.xw = playerPosTemp.x;
+      textModel.yw = playerPosTemp.y;
+    
+      sprintf_s(text, "(%i,%i)->(%i,%i)", boardPos.x, boardPos.y ,hexCoords.x, hexCoords.y);
+
+
+      *renderMemory = renderObject{TEXT, textModel.translatedX(-0.5f), viewResult.view, identity3f,0,0.f, text};
+      renderMemory++;
+
+      sprintf_s(text, "(%f,%f)", playerPosTemp.x, playerPosTemp.y);
+      *renderMemory = renderObject{TEXT, textModel.translated(-0.5f, 0.3f, 0.f), viewResult.view, identity3f,0,0.f, text};
+      renderMemory++;
+    }
 
     
   }
@@ -1487,12 +1496,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	renderMemory->highlight_key = highlight_key;
 	renderMemory++;
 
-	mat4 textModel = anchorModel;
-	//textModel.xw -= 0.5;
-	char text[256];
-	sprintf_s(text, "(%i,%i)>(%i,%i)", xid, yid, hexCoords.x, hexCoords.y);
-	*renderMemory = renderObject{TEXT, textModel, viewResult.view, identity3f,0,0.f, text};
-	renderMemory++;
+	if(memoryInfo->debugTextActive) {
+
+	  mat4 textModel = anchorModel;
+	  //textModel.xw -= 0.5;
+	  char text[256];
+	  sprintf_s(text, "(%i,%i)>(%i,%i)", xid, yid, hexCoords.x, hexCoords.y);
+	  *renderMemory = renderObject{TEXT, textModel, viewResult.view, identity3f,0,0.f, text};
+	  renderMemory++;
+	}
 
 
 	
@@ -1675,7 +1687,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
   //Game-specific log values
-  {
+  if(memoryInfo->debugTextActive) {
     char text[256];
     
     ivec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
@@ -1698,11 +1710,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
     
   }
-
-
-
-  
-
   
 
   //Make sure that we didn't overuse memory in our render buffer
@@ -1716,3 +1723,4 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 }
 
+ 
