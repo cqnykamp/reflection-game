@@ -76,8 +76,6 @@ struct LoopedCodeData {
   
 };
 
-
-
 void log(const char *message) {
   for(int i=0; i<strlen(message); i++ ) {
     
@@ -85,9 +83,6 @@ void log(const char *message) {
     usedChars++;
   }
 }
-
-
-
 
 
 unsigned int loadShaderFromFile(const char *filePath) {

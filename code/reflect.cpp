@@ -57,7 +57,6 @@ enum Angle {
   UP_LEFT = 3,
 };
 
-
 struct LevelState {
   imat3 basis;
   imat3 target_basis;
@@ -76,6 +75,10 @@ struct LevelState {
   mat3 hexBasis;
   mat3 hexTargetBasis;
   int hexMirrorAngleId;
+
+
+  //NOTE: only for hex mode, updates throughout level
+  ivec2 pos;
   
 };
 
@@ -244,6 +247,21 @@ mat3 rotate(float theta) {
     sin(theta),  cos(theta), 0.f,
     0.f,         0.f,        1.f
   };
+}
+
+
+
+bool isTriangleFlipped(ivec2 hexCoords) {
+  bool flipped = false;
+  if( (hexCoords.x + hexCoords.y) % 2 == 1) {
+    flipped = !flipped;
+  }
+
+  if( (int)floor((float)hexCoords.y / 2.f) % 2 == 1) {
+    flipped = !flipped;
+  }
+
+  return flipped;
 }
 
 
@@ -477,6 +495,14 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
   
   state->hexTargetBasis = state->hexBasis;
 
+
+  state->pos = ivec2{
+    levelInfo->player_pos_original.x + 1,
+    levelInfo->player_pos_original.y * 2  + 1};
+
+
+  
+
   std::cout << "Hex basis\n";
   printMat3(state->hexBasis);
   std::cout << "Hex target basis\n";
@@ -484,6 +510,9 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
   std::printf("Player pos orig: (%i, %i)\n",
 	      levelInfo->player_pos_original.x,
 	      levelInfo->player_pos_original.y);
+
+  std::printf("Player pos (updating): (%i, %i)\n",
+	      state->pos.x, state->pos.y);
 
 
   std::printf("Player pos render space:\n");
@@ -493,8 +522,331 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
 
 
 
+//Input: hex player pos (not neccessarily level starting pos)
+//Output: new hex player pos
+ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
+
+  ivec2 newPos;
+  
+  ivec2 mirrorPos = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+
+  std::printf("Player pos: (%i, %i)\n", state->pos.x, state->pos.y);
+  
+  std::cout << "Mirror y pos raw: " << state->mirrorFragmentAnchor.y << "\n";
+  std::cout << "Mirror y pos: " << mirrorPos.y << "\n";
 
 
+  switch(state->hexMirrorAngleId) {
+  case 0:
+    {
+
+      newPos.x = pos.x;
+      newPos.y = 2 * mirrorPos.y - pos.y;
+      
+    } break;
+    
+  case 3:
+    {
+      newPos.y = pos.y;
+      newPos.x = 2 * mirrorPos.x - pos.x;
+    } break;
+
+  case 2:
+    {
+
+      int mirrorDiag = 2*mirrorPos.x - mirrorPos.y;
+
+      int rollDir;
+      if( 2*pos.x - pos.y > mirrorDiag) {
+	rollDir = 1;
+      } else {
+	rollDir = -1;
+      }
+
+      std::cout << "Roll dir: " << rollDir << "\n";
+
+      bool hasPassedMirror = false;
+      ivec2 rollPos = pos;
+      int rolls = 0;
+
+      while(!hasPassedMirror) {
+	bool flipped = isTriangleFlipped(rollPos);
+
+	if(flipped != (rollDir == -1)) {
+	  rollPos = rollPos +  rollDir * ivec2{-2, 2};
+	} else {
+	  rollPos = rollPos + rollDir * ivec2{-1, 0};
+	}
+	rolls++;
+
+	std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
+		    rollPos.x, rollPos.y, flipped, rollDir);
+
+	if( (rollDir == 1 && 2*rollPos.x-rollPos.y < mirrorDiag)
+	  || (rollDir == -1 && 2*rollPos.x-rollPos.y > mirrorDiag) ) {
+	  
+	  hasPassedMirror = true;
+	}
+	
+      }
+
+
+      for(int i=0; i < rolls-1; i++) {
+	bool flipped = isTriangleFlipped(rollPos);
+
+	if(flipped != (rollDir == -1)) {
+	  rollPos = rollPos +  rollDir * ivec2{-2, 2};
+	} else {
+	  rollPos = rollPos + rollDir * ivec2{-1, 0};
+	}
+	//rolls++;
+
+	std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
+		    rollPos.x, rollPos.y, flipped, rollDir);	
+      }
+
+      newPos = rollPos;
+
+      
+
+      /**
+      int playerDiagRaw = 2*state->pos.x - state->pos.y;
+      int playerDiagOffset = (int)floor( ceil((float)playerDiagRaw/2.f) / 2.f);
+      int playerDiag = playerDiagRaw - playerDiagOffset;
+
+
+      //int playerDiag = 2 * pos.x - pos.y;
+      
+      int mirrorDiag = 2 * mirrorPos.x - mirrorPos.y;
+
+      std::cout << "Player diag: " << playerDiag << "\n";
+      std::cout << "Player diag raw: " << playerDiagRaw << "\n";
+      std::cout << "Player diag offset: " << playerDiagOffset << "\n";
+
+      
+
+      std::cout << "Mirror diag: " << mirrorDiag << "\n";
+
+      int c = (int) ceil( ((float)playerDiagRaw - (float)mirrorDiag - 1.f) / 2.f);
+      int vertOffset = (int) floor( ((float) c + 1.f) / 2.f);
+
+      newPos.y = pos.y += -2 * vertOffset;
+      newPos.x = pos.x + (mirrorDiag - playerDiag);
+
+      **/
+
+      /**
+      if(2 * pos.x - pos.y == 1) {
+	newPos.x = pos.x - 1;
+	newPos.y = pos.y;
+	
+      } else if (2*pos.x - pos.y == -1) {
+	newPos.x = pos.x + 1;
+	newPos.y = pos.y;
+      }
+      **/
+
+      
+    } break;
+
+  case 4:
+    {
+      int mirrorDiag = 2*mirrorPos.x + mirrorPos.y;
+
+      int rollDir;
+      if( 2*pos.x + pos.y > mirrorDiag) {
+	rollDir = 1;
+      } else {
+	rollDir = -1;
+      }
+
+      std::cout << "Roll dir: " << rollDir << "\n";
+
+      bool hasPassedMirror = false;
+      ivec2 rollPos = pos;
+      int rolls = 0;
+
+      while(!hasPassedMirror) {
+	bool flipped = isTriangleFlipped(rollPos);
+
+	if(flipped != (rollDir == -1)) {
+	  rollPos = rollPos +  rollDir * ivec2{-1, 0};
+	} else {
+	  rollPos = rollPos + rollDir * ivec2{-2, -2};
+	}
+	rolls++;
+
+	std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
+		    rollPos.x, rollPos.y, flipped, rollDir);
+
+	if( (rollDir == 1 && 2*rollPos.x + rollPos.y < mirrorDiag)
+	  || (rollDir == -1 && 2*rollPos.x + rollPos.y > mirrorDiag) ) {
+	  
+	  hasPassedMirror = true;
+	}
+	
+      }
+
+
+      for(int i=0; i < rolls-1; i++) {
+	bool flipped = isTriangleFlipped(rollPos);
+
+	if(flipped != (rollDir == -1)) {
+	  rollPos = rollPos +  rollDir * ivec2{-1, 0};
+	} else {
+	  rollPos = rollPos + rollDir * ivec2{-2, -2};
+	}
+	//rolls++;
+
+	std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
+		    rollPos.x, rollPos.y, flipped, rollDir);	
+      }
+
+      newPos = rollPos;
+
+    } break;
+
+
+  case 1:
+    {
+      int mirrorDiag = 2*mirrorPos.x - 3* mirrorPos.y;
+
+      int rollDir;
+      if( 2*pos.x - 3*pos.y > mirrorDiag + 1) {
+	rollDir = 1;
+      } else if (2*pos.x -3*pos.y < mirrorDiag - 1) {
+	rollDir = -1;
+      
+      } else {
+
+	std::cout << "Already on the mirror\n";
+	return pos;
+      }
+
+      std::cout << "Roll dir: " << rollDir << "\n";
+
+      bool hasPassedMirror = false;
+      ivec2 rollPos = pos;
+      int rolls = 0;
+
+      while(!hasPassedMirror) {
+	rollPos = rollPos + rollDir * ivec2{-1, 2};
+	
+	/**
+	bool flipped = isTriangleFlipped(rollPos);
+
+	if(flipped != (rollDir == -1)) {
+	  rollPos = rollPos +  rollDir * ivec2{-1, -2};
+	} else {
+	  rollPos = rollPos + rollDir * ivec2{-2, -2};
+	}
+	**/
+	rolls++;
+
+	std::printf("New roll: (%i, %i) Dir: %i\n",
+		    rollPos.x, rollPos.y, rollDir);
+
+
+	if(2*rollPos.x - 3*rollPos.y <= mirrorDiag + 1 &&
+	   2*rollPos.x - 3*rollPos.y >= mirrorDiag - 1) {
+	  hasPassedMirror = true;
+	  std::cout << "Is on mirror\n";
+	  rolls++;
+
+	} else if( (rollDir == 1 && 2*rollPos.x - 3*rollPos.y <= mirrorDiag )
+	  || (rollDir == -1 && 2*rollPos.x - 3*rollPos.y >= mirrorDiag) ) {
+	  
+	  hasPassedMirror = true;
+	  std::cout << "Has passed mirror\n"; 
+	}
+	
+      }
+
+      for(int i=0; i < rolls-1; i++) {
+	rollPos = rollPos + rollDir * ivec2{-1, 2};
+	std::printf("New roll: (%i, %i) Dir: %i\n",
+		    rollPos.x, rollPos.y, rollDir);	
+      }
+
+      newPos = rollPos;
+
+    } break;
+
+  case 5:
+    {
+
+      int mirrorDiag = 2*mirrorPos.x + 3* mirrorPos.y;
+
+      int rollDir;
+      if( 2*pos.x + 3*pos.y > mirrorDiag + 1) {
+	rollDir = 1;
+      } else if (2*pos.x + 3*pos.y < mirrorDiag - 1) {
+	rollDir = -1;
+      
+      } else {
+
+	std::cout << "Already on the mirror\n";
+	return pos;
+      }
+
+      std::cout << "Roll dir: " << rollDir << "\n";
+
+      bool hasPassedMirror = false;
+      ivec2 rollPos = pos;
+      int rolls = 0;
+
+      while(!hasPassedMirror) {
+	rollPos = rollPos + rollDir * ivec2{-1, -2};
+	
+	/**
+	   bool flipped = isTriangleFlipped(rollPos);
+
+	   if(flipped != (rollDir == -1)) {
+	   rollPos = rollPos +  rollDir * ivec2{-1, -2};
+	   } else {
+	   rollPos = rollPos + rollDir * ivec2{-2, -2};
+	   }
+	**/
+	rolls++;
+
+	std::printf("New roll: (%i, %i) Dir: %i\n",
+		    rollPos.x, rollPos.y, rollDir);
+
+
+	if(2*rollPos.x + 3*rollPos.y <= mirrorDiag + 1 &&
+	   2*rollPos.x + 3*rollPos.y >= mirrorDiag - 1) {
+	  hasPassedMirror = true;
+	  std::cout << "Is on mirror\n";
+	  rolls++;
+
+	} else if( (rollDir == 1 && 2*rollPos.x + 3*rollPos.y <= mirrorDiag )
+		   || (rollDir == -1 && 2*rollPos.x + 3*rollPos.y >= mirrorDiag) ) {
+	  
+	  hasPassedMirror = true;
+	  std::cout << "Has passed mirror\n"; 
+	}
+	
+      }
+
+      for(int i=0; i < rolls-1; i++) {
+	rollPos = rollPos + rollDir * ivec2{-1, -2};
+	std::printf("New roll: (%i, %i) Dir: %i\n",
+		    rollPos.x, rollPos.y, rollDir);	
+      }
+
+      newPos = rollPos;
+      
+    } break;
+    
+    
+  default: {
+    newPos = pos;
+  }
+  }
+
+  return newPos;
+  
+}
 
 
 
@@ -630,6 +982,8 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
   if(memoryInfo->hexMode) {
     state->hexBasis = state->hexTargetBasis;
 
+
+    /*
     ivec2 boardPos = levelInfo->player_pos_original;
     ivec2 playerPos = ivec2{boardPos.x + 1, 2*boardPos.y + 1};
     
@@ -637,9 +991,7 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
     tempPlayerPos = state->hexTargetBasis * tempPlayerPos;
 
     playerPos = ivec2{(int)tempPlayerPos.x, (int)tempPlayerPos.y};
-
-
-    
+    */
 
     bool isPlayerSupported = false;
     bool isPlayerOnGoal = false;
@@ -649,9 +1001,9 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
 
       ivec2 tilePos = ivec2{ tile.xid + 1, 2*tile.yid + 1};
      
-      if(tilePos.x == playerPos.x && tilePos.y == playerPos.y) {
+      if(tilePos.x == state->pos.x && tilePos.y == state->pos.y) {
 
-	std::printf("Supported pos (%i, %i)\n", playerPos.x, playerPos.y);
+	std::printf("Supported pos (%i, %i)\n", state->pos.x, state->pos.y);
 	
 	isPlayerSupported = true;
 
@@ -817,11 +1169,21 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
     createNewRenderObject(background_vertices, 12, background_indices, 6, "shaders/background.shader", BACKGROUND);
     
     if(hexMode) {
+      
+      float floor_vertices[] = {
+	-0.5f, -1.f/3.f * sqrt(0.75f), 0.f, //left
+	 0.5f, -1.f/3.f * sqrt(0.75f), 0.f, //right
+	 0.0f,  2.f/3.f * sqrt(0.75f), 0.f //bottom
+      };
+
+
+      /**
       float floor_vertices[] = {
 	-1.0f, -1.0f, 0.0f,
 	1.0f, -1.0f, 0.0f,
 	0.0f, 1.0f, 0.0f
       };
+      **/
     
       unsigned int floor_indices[] = {
 	0, 1, 2
@@ -847,21 +1209,21 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
     }
 
     if(hexMode) {
-      float pad = 0.3f;
+      float pad = 0.0f;
+
+      float player_vertices[] = {
+	-0.5f, -1.f/3.f * sqrt(0.75f), 0.f, //left
+	0.5f, -1.f/3.f * sqrt(0.75f), 0.f, //right
+	0.0f,  2.f/3.f * sqrt(0.75f), 0.f //bottom
+      };
 
       /**
-      float player_vertices[] = {
-	sqrt(3.f) * pad,        0.f + pad,                  0.f, //left
-	1.0f - sqrt(3.f) * pad, 0.f + pad,                  0.f, //right
-	0.5f,                   1.5f / sqrt(3.f) - 2.f*pad, 0.f //bottom
-      };
-      **/
-
       float player_vertices[] = {
 	-1.0f + pad, -1.0f + pad, 0.0f,
 	1.0f - pad, -1.0f + pad, 0.0f,
 	0.0f, 1.0f - pad, 0.0f
       };
+      **/
 
     
       unsigned int player_indices[] = {
@@ -1019,7 +1381,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     state->sleep_active = false;
 
     if(memoryInfo->hexMode) {
-      reflectAlongHexMode(state, state->mirrorFragmentAnchor, state->hexMirrorAngleId);
+      //reflectAlongHexMode(state, state->mirrorFragmentAnchor, state->hexMirrorAngleId);
+      state->pos = findNewPlayerPos(state, state->pos);
+      state->is_animation_active = false;
+      onPlayerMovementFinished(memoryInfo, levelInfo, state, input.currentTime);	
+
+      
     } else {
       reflect_along(state, state->mirrorFragmentAnchor, state->mirrorFragmentAngle);
     }
@@ -1147,22 +1514,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	  levelInfo->tiles[i].xid, //levelInfo->tiles[i].xid,
 	  levelInfo->tiles[i].yid});
       */
-      
 
-      bool flipped = false;
-      if(levelInfo->tiles[i].yid % 2 == 1) {
-	flipped = !flipped;
-      }
-      if(numInXid == 1) {
-	flipped = !flipped;
-      }
+      model.xw = 0.5f * (float)hexCoords.x;
+      model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
 
-      model.xw = (float)hexCoords.x;
-      model.yw = (float)hexCoords.y;
-
-      if(flipped) {
-	//model.yw += 1.0f;
-	//model.xw -= 0.5f;
+      if(isTriangleFlipped(hexCoords)) {
+	model.yw += 1.f/3.f * sqrt(0.75f);
 	model.yy *= -1;
       }
 
@@ -1206,27 +1563,18 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
     if(memoryInfo->hexMode) {
 
-      //vec2 hexPos = hexBoardToLinearSpace(levelInfo->player_pos_original);
-      
-      //vec2 hexCoords = hexLinearSpaceToRenderSpace(levelInfo->player_pos_original);
-      
-      hexCoords = ivec2{boardPos.x + 1, 2*boardPos.y + 1};
-      //vec2 hexCoords = levelInfo->player_pos_original;
-      
-      model.xw = (float)hexCoords.x;
-      model.yw = (float)hexCoords.y;
+      hexCoords = state->pos;
 
-      
-      bool flipped = false;
-      if(hexCoords.y % 2 == 1) {
-	flipped = !flipped;
-      }
-      if(hexCoords.x % 2 == 1) {
-	flipped = !flipped;
-      }
-      if(flipped) {
+      model.xw = 0.5f * (float)hexCoords.x;
+      model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
+
+      if(isTriangleFlipped(hexCoords)) {
+	model.yw += 1.f/3.f * sqrt(0.75f);
 	model.yy *= -1;
       }
+
+      model.xx *= 0.95f;
+      model.yy *= 0.95f;
 
 
       assert(animation_basis.zx == 0);
@@ -1275,22 +1623,38 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       vec3 playerPosTemp = vec3{(float)hexCoords.x, (float)hexCoords.y, 1.f};
       playerPosTemp = basis * playerPosTemp;
 
-
-      mat4 textModel = identity4;
-      textModel.xw = playerPosTemp.x;
-      textModel.yw = playerPosTemp.y;
+      mat4 textModel = identity4.translated(playerPosTemp.x, playerPosTemp.y, 0.0f);
     
       sprintf_s(text, "(%i,%i)->(%i,%i)", boardPos.x, boardPos.y ,hexCoords.x, hexCoords.y);
-
-
       *renderMemory = renderObject{TEXT, textModel.translatedX(-0.5f), viewResult.view, identity3f,0,0.f, text};
       renderMemory++;
 
       sprintf_s(text, "(%f,%f)", playerPosTemp.x, playerPosTemp.y);
       *renderMemory = renderObject{TEXT, textModel.translated(-0.5f, 0.3f, 0.f), viewResult.view, identity3f,0,0.f, text};
       renderMemory++;
-    }
+      
 
+      /**
+      for(int i=0; i<3; i++) {
+	mat4 vertexPos = vec3{
+	  (float) (hexCoords.x + player_vertices[3*i]),
+	  (float) (hexCoords.y + player_vertices[3*i + 1]),
+	  0.0f
+	};
+	
+	vertexPos = basis * vertexPos;
+
+	mat4 vertexTextModel = identity4.translated{vertexPos.x, vertexPos.y, 0.0f);
+    
+	sprintf_s(text, "(%f,%f)", vertexPos.x, vertexPos.y);
+	*renderMemory = renderObject{TEXT, vertexTextModel, viewResult.view, identity3f,0,0.f, text};
+	renderMemory++;
+		 
+      }
+      **/
+
+      
+    }
     
   }
   
@@ -1319,8 +1683,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
 
-
-  
   //Anchors
 
 
@@ -1331,17 +1693,13 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     for(int xid=0; xid<BOARD_WIDTH; xid++) {
       if(levelInfo->board[yid][xid] != 0) {
 
-
-
 	ivec2 hexCoords = ivec2{2*xid, 2*yid};
 	if(hexCoords.y % 4 == 2) {
 	  hexCoords.x += 1;
 	}
 
-
 	ivec2 diff;
 	
-
 	int highlight_key = 0;
 
 	if(state->mirrorState==MIRROR_INACTIVE) {
@@ -1475,9 +1833,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	    hexCoords.x += 1;
 	  }
 	  */
+
 	  
-	  anchorModel.xw = (float)hexCoords.x;
-	  anchorModel.yw = (float)hexCoords.y;
+	  anchorModel.xw = 0.5f * (float)hexCoords.x;
+	  anchorModel.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
 
 	} else {
 	  anchorModel.xw = (float)xid;
@@ -1557,8 +1916,16 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	state->mirrorTimeElapsed = 0.f;
 
 	if(memoryInfo->hexMode) {  
-	  reflectAlongHexMode(state, state->mirrorFragmentAnchor,
-			      state->hexMirrorAngleId);	  
+	  //reflectAlongHexMode(state, state->mirrorFragmentAnchor,
+	  //			      state->hexMirrorAngleId);
+
+	  state->pos = findNewPlayerPos(state, state->pos);
+	  state->is_animation_active = false;
+	  onPlayerMovementFinished(memoryInfo, levelInfo, state, input.currentTime); 
+
+
+	  
+	  
 	} else {
 	  reflect_along(state, state->mirrorFragmentAnchor,
 			state->mirrorFragmentAngle);
@@ -1684,8 +2051,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   renderMemory++;
 
 
-
-
   //Game-specific log values
   if(memoryInfo->debugTextActive) {
     char text[256];
@@ -1706,8 +2071,45 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       identity4,identity3f,0,0.f, text};
     renderMemory++;
 
+    sprintf_s(text, "Current player pos (in linear space): (%i,%i)",
+	      state->pos.x, state->pos.y);
+    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.85f, 0.f),
+      identity4,identity3f,0,0.f, text};
+    renderMemory++;
+
+    
+    sprintf_s(text, "Player flipped: %i", isTriangleFlipped(state->pos));
+    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.80f, 0.f),
+      identity4,identity3f,0,0.f, text};
+    renderMemory++;
 
 
+    
+
+
+    
+    ivec2 mirrorPos = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+
+
+    /**
+    int playerDiagRaw = 2*state->pos.x - state->pos.y;
+    int playerDiagOffset = (int)floor( ceil((float)playerDiagRaw/2.f) / 2.f);
+    int playerDiag = playerDiagRaw - playerDiagOffset;
+   
+    int mirrorDiag = 2 * mirrorPos.x - mirrorPos.y;
+
+    sprintf_s(text, "Player diag: %i    Mirror diag: %i",
+	      playerDiag, mirrorDiag);
+    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.80f, 0.f),
+      identity4,identity3f,0,0.f, text};
+    renderMemory++;
+
+    sprintf_s(text, "Player diag offset: %i", playerDiagOffset);
+    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.75f, 0.f),
+      identity4,identity3f,0,0.f, text};
+    renderMemory++;
+
+    **/
     
   }
   
@@ -1722,5 +2124,3 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
 }
-
- 
