@@ -204,11 +204,15 @@ ivec2 nearestAnchor(LevelInfo *levelInfo, vec2 point, bool hexMode) {
 
 	vec2 myVec = vec2{(float)xid, (float)yid};
 	if(hexMode) {
+	  
 	  ivec2 hexVec = ivec2{2*xid,2*yid};
 	  if(hexVec.y % 4 == 2) {
 	    hexVec.x += 1;
-	  }	  
-	  myVec = hexVec;
+	  }
+	  myVec = (vec2) hexVec;
+	  myVec.x *= 0.5f;
+	  myVec.y *= 0.5f * sqrt(0.75f);
+
 	}
 
 	float current_dist = magnitude(point - myVec);
@@ -1372,9 +1376,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     / (float) (0.5f*input.screenHeight);
 
   vec4 coord_rel = {xrel, yrel, 0.0f, 1.0f};
-  vec4 coord_orig = viewResult.view_inverse * coord_rel; 
-  vec2 mouse_coords = vec2(coord_orig.x, coord_orig.y);
+  vec4 coord_orig = viewResult.view_inverse * coord_rel;
 
+  
+  vec2 mouse_coords = vec2(coord_orig.x, coord_orig.y);
 
   // Animation basis
   if(state->sleep_active && input.currentTime >= state->sleepStartTime + SLEEP_DURATION) {
@@ -1495,36 +1500,21 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     ivec2 hexCoords;
 
     if(memoryInfo->hexMode) {
-      
-      int overlappingXid;
-      if(levelInfo->tiles[i].yid % 2 == 1) {
-	overlappingXid = levelInfo->tiles[i].xid / 2;
-      } else {
-	overlappingXid = (1 + levelInfo->tiles[i].xid) / 2; //NOTE: intentional loss of info
-      }
-      int numInXid = levelInfo->tiles[i].xid % 2;
-      float yid = (float)levelInfo->tiles[i].yid;
-
-      //vec2 hexCoords = hexBoardToRenderSpace(vec2{(float)overlappingXid, yid});
 
       hexCoords = ivec2{tile.xid + 1, 2*tile.yid + 1};
-
-      /**
-      hexCoords = hexBoardToLinearSpace(ivec2{
-	  levelInfo->tiles[i].xid, //levelInfo->tiles[i].xid,
-	  levelInfo->tiles[i].yid});
-      */
-
+      
       model.xw = 0.5f * (float)hexCoords.x;
       model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
-
+      
+      model.yw += sqrt(0.75f) - 1; //align edge of triangle with anchors
+      
       if(isTriangleFlipped(hexCoords)) {
 	model.yw += 1.f/3.f * sqrt(0.75f);
 	model.yy *= -1;
       }
 
-      model.xx *= 0.95f;
-      model.yy *= 0.95f;
+      //model.xx *= 0.95f;
+      //model.yy *= 0.95f;
             
     } else {
 
@@ -1568,6 +1558,9 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       model.xw = 0.5f * (float)hexCoords.x;
       model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
 
+
+      model.yw += sqrt(0.75f) - 1; //align edge of triangle with anchors
+
       if(isTriangleFlipped(hexCoords)) {
 	model.yw += 1.f/3.f * sqrt(0.75f);
 	model.yy *= -1;
@@ -1593,6 +1586,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       basis = {
 	xcol.x, ycol.x, zcol.x,
 	xcol.y, ycol.y, zcol.y,
+	0, 0, 1
+      };
+
+      basis = {
+	1, 0, 0,
+	0, 1, 0,
 	0, 0, 1
       };
 
@@ -1685,7 +1684,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
   //Anchors
 
-
   //NOTE: this var is used to determine if valid mirror on mouse release
   bool passesThroughAnchor = false; 
 
@@ -1707,9 +1705,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	  if(memoryInfo->hexMode) {
 
+	    vec2 anchorRenderCoords = (vec2) hexCoords;
+	    anchorRenderCoords.x *= 0.5f;
+	    anchorRenderCoords.y *= 0.5f * sqrt(0.75f);
+
 	    
 	    if(nearestAnchor(levelInfo, mouse_coords, true) == myVec
-	       && magnitude(mouse_coords - hexCoords) < MOUSE_HOVER_SNAP_DIST) {
+	       && magnitude(mouse_coords - anchorRenderCoords) < MOUSE_HOVER_SNAP_DIST) {
+
+	      //if(magnitude(mouse_coords - anchorRenderCoords) < MOUSE_HOVER_SNAP_DIST) {
 	      highlight_key = 1;
 	    }
 	    
@@ -1825,16 +1829,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	mat4 anchorModel = identity4;
 
 	if(memoryInfo->hexMode) {
-	  //vec2 hexCoords = hexBoardToRenderSpace(ivec2{xid,yid});
 
-	  /**
-	  ivec2 hexCoords = ivec2{2*xid, 2*yid};
-	  if(hexCoords.y % 4 == 2) {
-	    hexCoords.x += 1;
-	  }
-	  */
-
-	  
 	  anchorModel.xw = 0.5f * (float)hexCoords.x;
 	  anchorModel.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
 
@@ -1843,13 +1838,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	  anchorModel.yw = (float)yid;
 	}
 
-
-	/*
-	anchorModel.yw *= sqrt(0.75f);
-	if(yid % 2 == 0) {
-	  anchorModel.xw += 0.5f;
-	}
-	*/
 
 	*renderMemory = renderObject{ANCHOR, anchorModel, viewResult.view};
 	renderMemory->highlight_key = highlight_key;
@@ -2082,7 +2070,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.80f, 0.f),
       identity4,identity3f,0,0.f, text};
     renderMemory++;
-
+    
+    sprintf_s(text, "Mouse coords: (%f, %f)", mouse_coords.x, mouse_coords.y);
+    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.75f, 0.f),
+      identity4,identity3f,0,0.f, text};
+    renderMemory++;
 
     
 
