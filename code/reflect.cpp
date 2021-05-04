@@ -1586,8 +1586,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	model.yy *= -1;
       }
 
-      model.xx *= 0.95f;
-      model.yy *= 0.95f;
+      model.xx *= 0.80f;
+      model.yy *= 0.80f;
 
 
       assert(animation_basis.zx == 0);
@@ -1790,24 +1790,30 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 		
 		) {
 	      
-	      vec2 mirrorAnchor = hexBoardToRenderSpace(state->mirrorFragmentAnchor);
+	      //vec2 mirrorAnchor = hexBoardToRenderSpace(state->mirrorFragmentAnchor);
+	      vec2 mirrorAnchor = (vec2) hexAnchor;
+	      mirrorAnchor.x *= 0.5f;
+	      mirrorAnchor.y *= 0.5f * sqrt(0.75f);
+
 	      vec2 mirrorFragRelative = {
 		state->mirrorFragmentMag * cos(state->hexMirrorAngleId * PI/6),
 		state->mirrorFragmentMag * sin(state->hexMirrorAngleId * PI/6),
 	      };
 	      
-	      vec2 mirrorFrag = hexBoardToRenderSpace(state->mirrorFragmentAnchor)
-		+ mirrorFragRelative;
-	      	      
+	      vec2 mirrorFrag = mirrorAnchor + mirrorFragRelative;
+	      
 	      float leftBound = min(mirrorAnchor.x, mirrorFrag.x);
 	      float rightBound = max(mirrorAnchor.x, mirrorFrag.x);
 	      float bottomBound = min(mirrorAnchor.y, mirrorFrag.y);
 	      float topBound = max(mirrorAnchor.y, mirrorFrag.y);
+
 	      
-	      vec2 p = hexBoardToRenderSpace(point);
+	      vec2 p = (vec2) hexCoords;
+	      p.x *= 0.5f;
+	      p.y *= 0.5f * sqrt(0.75f);
 
 	      //std::printf("L %f R %f B %f T %f Px %f Py %f\n",
-	      //leftBound,rightBound,bottomBound,topBound,p.x,p.y);	      
+	      //leftBound,rightBound,bottomBound,topBound,p.x,p.y);
 
 	      if( (mirrorId==3 || (p.x > leftBound && p.x < rightBound)) &&
 		  (mirrorId==0 || (p.y > bottomBound && p.y < topBound)) ) {
@@ -1817,8 +1823,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	      }
 	      
 	    }
-	    
-	      
+	    	      
 	  } else {
 
 	    coord1 = state->mirrorFragmentAnchor;
@@ -1846,7 +1851,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	  }
 
 	  if(isTheAnchor || passesThroughLine) {
-	    highlight_key = 1;	      
+	    highlight_key = 1;
 	  }
 	  
 	}
