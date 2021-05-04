@@ -232,8 +232,17 @@ bool isNearbyAnchor(LevelInfo *levelInfo, vec2 coord, float maxAcceptableDistanc
     for(int xid=0; xid < (levelInfo->level_width+1); xid++) {
 
       vec2 thisVec = vec2{(float)xid, (float)yid};
-      if(hexMode) {	
-	thisVec = hexBoardToLinearSpace(ivec2{xid,yid});
+      if(hexMode) {
+		  
+	ivec2 hexVec = ivec2{2*xid,2*yid};
+	if(hexVec.y % 4 == 2) {
+	  hexVec.x += 1;
+	}
+	thisVec = (vec2) hexVec;
+	thisVec.x *= 0.5f;
+	thisVec.y *= 0.5f * sqrt(0.75f);
+	
+	//thisVec = hexBoardToLinearSpace(ivec2{xid,yid});
       }
       
       if(levelInfo->board[yid][xid] == 1
@@ -1444,7 +1453,19 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     
     vec2 d;
     if(memoryInfo->hexMode) {
-      d = mouse_coords - hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+      //d = mouse_coords - hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+      
+      ivec2 hexAnchorCoords = 2 * state->mirrorFragmentAnchor;
+      if(hexAnchorCoords.y % 4 == 2) {
+	hexAnchorCoords.x += 1;
+      }
+
+      vec2 hexAnchor = (vec2) hexAnchorCoords;
+      hexAnchor.x *= 0.5f;
+      hexAnchor.y *= 0.5f * sqrt(0.75f);
+
+      d = mouse_coords - hexAnchor;
+      
     } else {
       d = mouse_coords - state->mirrorFragmentAnchor;
     }
@@ -1456,7 +1477,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     // aka, set mirrorFragmentAngle
     // Then calculate fragment magnitude
     //
-
 
     if(memoryInfo->hexMode) {
 
@@ -1713,7 +1733,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	    if(nearestAnchor(levelInfo, mouse_coords, true) == myVec
 	       && magnitude(mouse_coords - anchorRenderCoords) < MOUSE_HOVER_SNAP_DIST) {
 
-	      //if(magnitude(mouse_coords - anchorRenderCoords) < MOUSE_HOVER_SNAP_DIST) {
 	      highlight_key = 1;
 	    }
 	    
@@ -1739,8 +1758,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	  if(memoryInfo->hexMode) {
 
-	    ivec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
-	    ivec2 hexPoint = hexBoardToLinearSpace(point);
+	    //ivec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+	    //ivec2 hexPoint = hexBoardToLinearSpace(point);
+	    
+	    ivec2 hexAnchor = 2 * state->mirrorFragmentAnchor;
+	    if(hexAnchor.y % 4 == 2) {
+	      hexAnchor.x += 1;
+	    }
+
+	    ivec2 hexPoint = hexCoords; //TODO: redundant variable
 	    
 	    diff = hexPoint - hexAnchor;
 	    //std::printf("Diff (%i, %i)\n", diff.x, diff.y);
@@ -1762,13 +1788,14 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 		(mirrorId==5 && diff.x!=0 && diff.y!=0 &&
 		 (float)diff.x / -3.f == (float)diff.y / 2.f)
 		
-	       ){
+		) {
 	      
 	      vec2 mirrorAnchor = hexBoardToRenderSpace(state->mirrorFragmentAnchor);
 	      vec2 mirrorFragRelative = {
 		state->mirrorFragmentMag * cos(state->hexMirrorAngleId * PI/6),
 		state->mirrorFragmentMag * sin(state->hexMirrorAngleId * PI/6),
 	      };
+	      
 	      vec2 mirrorFrag = hexBoardToRenderSpace(state->mirrorFragmentAnchor)
 		+ mirrorFragRelative;
 	      	      
@@ -1785,8 +1812,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	      if( (mirrorId==3 || (p.x > leftBound && p.x < rightBound)) &&
 		  (mirrorId==0 || (p.y > bottomBound && p.y < topBound)) ) {
 		 
-		passesThroughLine = true;
-		
+		passesThroughLine = true;		
 		passesThroughAnchor = true;
 	      }
 	      
@@ -1812,7 +1838,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 		 && pointCoordDot > 0) {
 	           
 		passesThroughLine = true;
-
 		passesThroughAnchor = true;
 	      }	    
 							    
@@ -1989,7 +2014,17 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
     if(memoryInfo->hexMode) {
 
-      vec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+      //vec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+
+      ivec2 hexAnchorCoords = 2 * state->mirrorFragmentAnchor;
+      if(hexAnchorCoords.y % 4 == 2) {
+	hexAnchorCoords.x += 1;
+      }
+
+      vec2 hexAnchor = (vec2) hexAnchorCoords;
+      hexAnchor.x *= 0.5f;
+      hexAnchor.y *= 0.5f * sqrt(0.75f);
+
 
       x1 = hexAnchor.x - mirrorExtension.x;
       y1 = hexAnchor.y - mirrorExtension.y;
