@@ -99,6 +99,28 @@ struct vec4 {
 // MATRICES
 //
 //
+  
+struct mat2 {
+  float xx=1.0f; float xy=0.0f;
+  float yx=0.0f; float yy=1.0f;
+};
+
+mat2 operator*(float v, mat2 m) {
+  return mat2 {
+    v * m.xx, v * m.xy,
+    v * m.yx, v * m.yy
+  };
+}
+
+
+
+const mat2 identity2f = mat2 {
+  1.0f, 0.0f,
+  0.0f, 1.0f
+};
+
+
+
 
 struct mat3 {
   float xx=1.0f; float xy=0.0f; float xz=0.0f;
@@ -256,8 +278,11 @@ struct mat4 {
   mat4 translatedY(float y) {
     return translated(0.f, y, 0.f);
   }
+
   
 };
+
+
 
 
 
@@ -318,6 +343,26 @@ mat4 operator*(mat4 a, mat4 b) {
     
   };
 }
+
+
+
+/** NOTE: not sure if this works
+
+mat4 rotate(mat4 m, float theta) {
+  
+  mat4 rot = {
+    cos(theta), -sin(theta), 0.f, 0.f,
+    sin(theta),  cos(theta), 0.f, 0.f,
+    0.f,         0.f,        1.f, 0.f,
+    0.f,         0.f,        0.f, 1.f
+  };
+
+  return rot * m;
+  
+};
+
+**/
+
 
 
 #define GAMEUTIL_CPP

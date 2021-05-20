@@ -1,6 +1,7 @@
 //TODO: use aliases for game state structs on some functions?
 
 #include "reflect.h"
+
 #include "gameutil.cpp"
 
 #include <iostream>
@@ -79,6 +80,10 @@ struct LevelState {
 
   //NOTE: only for hex mode, updates throughout level
   ivec2 pos;
+  int dir;
+  ivec2 corner1;
+  ivec2 corner2;
+  
   
 };
 
@@ -95,6 +100,24 @@ float customMod(float num, float base) {
     }
   }
   return result;
+}
+
+
+// m is slope
+mat2 createReflectionMatrixThroughLine(float m) {
+
+  //std::cout << m << "\n";
+  
+  mat2 mat = {
+    1.f - (m*m), 2.f*m,
+    2.f*m,     (m*m) - 1.f
+  };
+
+  float scalar = (1.f / (1.f + (m*m)));
+
+  mat = scalar * mat;
+
+  return mat;
 }
 
 
@@ -252,14 +275,6 @@ bool isNearbyAnchor(LevelInfo *levelInfo, vec2 coord, float maxAcceptableDistanc
     }
   }
   return false;
-}
-
-mat3 rotate(float theta) {
-  return mat3 {
-    cos(theta), -sin(theta), 0.f,
-    sin(theta),  cos(theta), 0.f,
-    0.f,         0.f,        1.f
-  };
 }
 
 
@@ -513,20 +528,20 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
     levelInfo->player_pos_original.x + 1,
     levelInfo->player_pos_original.y * 2  + 1};
 
+  if(isTriangleFlipped(state->pos)) {
+    state->corner1 = state->pos + ivec2{-1, 1};
+    state->corner2 = state->pos + ivec2{ 1, 1};
+    
+  } else {
+    state->corner1 = state->pos + ivec2{-1, -1};
+    state->corner2 = state->pos + ivec2{ 1, -1};
 
+  }
+
+  state->dir = 0;
   
-
-  std::cout << "Hex basis\n";
-  printMat3(state->hexBasis);
-  std::cout << "Hex target basis\n";
-  printMat3(state->hexTargetBasis);
-  std::printf("Player pos orig: (%i, %i)\n",
-	      levelInfo->player_pos_original.x,
-	      levelInfo->player_pos_original.y);
-
   std::printf("Player pos (updating): (%i, %i)\n",
 	      state->pos.x, state->pos.y);
-
 
   std::printf("Player pos render space:\n");
   vec2 playerRenderPos = hexLinearSpaceToRenderSpace(levelInfo->player_pos_original);
@@ -537,16 +552,18 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
 
 //Input: hex player pos (not neccessarily level starting pos)
 //Output: new hex player pos
+//NOTE: also side effect of changing player corners in state
 ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 
   ivec2 newPos;
   
   ivec2 mirrorPos = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
 
-  std::printf("Player pos: (%i, %i)\n", state->pos.x, state->pos.y);
+  std::printf(" -- Finding new player position --\n");
+  //std::printf("Player pos: (%i, %i)\n", state->pos.x, state->pos.y);
   
-  std::cout << "Mirror y pos raw: " << state->mirrorFragmentAnchor.y << "\n";
-  std::cout << "Mirror y pos: " << mirrorPos.y << "\n";
+  //std::cout << "Mirror y pos raw: " << state->mirrorFragmentAnchor.y << "\n";
+  //std::cout << "Mirror y pos: " << mirrorPos.y << "\n";
 
 
   switch(state->hexMirrorAngleId) {
@@ -555,6 +572,10 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 
       newPos.x = pos.x;
       newPos.y = 2 * mirrorPos.y - pos.y;
+
+      state->corner1.y = 2 * mirrorPos.y - state->corner1.y;
+      state->corner2.y = 2 * mirrorPos.y - state->corner2.y;
+      
       
     } break;
     
@@ -562,6 +583,10 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
     {
       newPos.y = pos.y;
       newPos.x = 2 * mirrorPos.x - pos.x;
+
+      state->corner1.x = 2 * mirrorPos.x - state->corner1.x;
+      state->corner2.x = 2 * mirrorPos.x - state->corner2.x;
+      
     } break;
 
   case 2:
@@ -576,7 +601,7 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	rollDir = -1;
       }
 
-      std::cout << "Roll dir: " << rollDir << "\n";
+      //std::cout << "Roll dir: " << rollDir << "\n";
 
       bool hasPassedMirror = false;
       ivec2 rollPos = pos;
@@ -592,8 +617,8 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	}
 	rolls++;
 
-	std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
-		    rollPos.x, rollPos.y, flipped, rollDir);
+	//std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
+	//	    rollPos.x, rollPos.y, flipped, rollDir);
 
 	if( (rollDir == 1 && 2*rollPos.x-rollPos.y < mirrorDiag)
 	  || (rollDir == -1 && 2*rollPos.x-rollPos.y > mirrorDiag) ) {
@@ -614,51 +639,23 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	}
 	//rolls++;
 
-	std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
-		    rollPos.x, rollPos.y, flipped, rollDir);	
+	//std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
+	//	    rollPos.x, rollPos.y, flipped, rollDir);	
       }
 
       newPos = rollPos;
 
-      
 
-      /**
-      int playerDiagRaw = 2*state->pos.x - state->pos.y;
-      int playerDiagOffset = (int)floor( ceil((float)playerDiagRaw/2.f) / 2.f);
-      int playerDiag = playerDiagRaw - playerDiagOffset;
+      int corner1Diag = 2 * state->corner1.x - state->corner1.y;
+      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{3, -2};
 
+      int corner2Diag = 2 * state->corner2.x - state->corner2.y;
+      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{3, -2};
 
-      //int playerDiag = 2 * pos.x - pos.y;
-      
-      int mirrorDiag = 2 * mirrorPos.x - mirrorPos.y;
-
-      std::cout << "Player diag: " << playerDiag << "\n";
-      std::cout << "Player diag raw: " << playerDiagRaw << "\n";
-      std::cout << "Player diag offset: " << playerDiagOffset << "\n";
-
-      
-
-      std::cout << "Mirror diag: " << mirrorDiag << "\n";
-
-      int c = (int) ceil( ((float)playerDiagRaw - (float)mirrorDiag - 1.f) / 2.f);
-      int vertOffset = (int) floor( ((float) c + 1.f) / 2.f);
-
-      newPos.y = pos.y += -2 * vertOffset;
-      newPos.x = pos.x + (mirrorDiag - playerDiag);
-
-      **/
-
-      /**
-      if(2 * pos.x - pos.y == 1) {
-	newPos.x = pos.x - 1;
-	newPos.y = pos.y;
-	
-      } else if (2*pos.x - pos.y == -1) {
-	newPos.x = pos.x + 1;
-	newPos.y = pos.y;
-      }
-      **/
-
+      /*
+      std::printf("Diagonals:\n  Mirror: %i\n  Corner1: %i\n  Corner2: %i\n",
+		  mirrorDiag, corner1Diag, corner2Diag);
+      */
       
     } break;
 
@@ -673,7 +670,7 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	rollDir = -1;
       }
 
-      std::cout << "Roll dir: " << rollDir << "\n";
+      //std::cout << "Roll dir: " << rollDir << "\n";
 
       bool hasPassedMirror = false;
       ivec2 rollPos = pos;
@@ -689,8 +686,8 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	}
 	rolls++;
 
-	std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
-		    rollPos.x, rollPos.y, flipped, rollDir);
+	//std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
+	//	    rollPos.x, rollPos.y, flipped, rollDir);
 
 	if( (rollDir == 1 && 2*rollPos.x + rollPos.y < mirrorDiag)
 	  || (rollDir == -1 && 2*rollPos.x + rollPos.y > mirrorDiag) ) {
@@ -711,11 +708,18 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	}
 	//rolls++;
 
-	std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
-		    rollPos.x, rollPos.y, flipped, rollDir);	
+	//std::printf("New roll: (%i, %i) Was flipped: %i Dir: %i\n",
+	//	    rollPos.x, rollPos.y, flipped, rollDir);	
       }
 
       newPos = rollPos;
+
+      int corner1Diag = 2 * state->corner1.x + state->corner1.y;
+      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{3, 2};
+
+      int corner2Diag = 2 * state->corner2.x + state->corner2.y;
+      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{3, 2};
+
 
     } break;
 
@@ -732,11 +736,11 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
       
       } else {
 
-	std::cout << "Already on the mirror\n";
+	//std::cout << "Already on the mirror\n";
 	return pos;
       }
 
-      std::cout << "Roll dir: " << rollDir << "\n";
+      //std::cout << "Roll dir: " << rollDir << "\n";
 
       bool hasPassedMirror = false;
       ivec2 rollPos = pos;
@@ -756,32 +760,46 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	**/
 	rolls++;
 
-	std::printf("New roll: (%i, %i) Dir: %i\n",
-		    rollPos.x, rollPos.y, rollDir);
+	//std::printf("New roll: (%i, %i) Dir: %i\n",
+	//	    rollPos.x, rollPos.y, rollDir);
 
 
 	if(2*rollPos.x - 3*rollPos.y <= mirrorDiag + 1 &&
 	   2*rollPos.x - 3*rollPos.y >= mirrorDiag - 1) {
 	  hasPassedMirror = true;
-	  std::cout << "Is on mirror\n";
+	  //std::cout << "Is on mirror\n";
 	  rolls++;
 
 	} else if( (rollDir == 1 && 2*rollPos.x - 3*rollPos.y <= mirrorDiag )
 	  || (rollDir == -1 && 2*rollPos.x - 3*rollPos.y >= mirrorDiag) ) {
 	  
 	  hasPassedMirror = true;
-	  std::cout << "Has passed mirror\n"; 
+	  //std::cout << "Has passed mirror\n"; 
 	}
 	
       }
 
       for(int i=0; i < rolls-1; i++) {
 	rollPos = rollPos + rollDir * ivec2{-1, 2};
-	std::printf("New roll: (%i, %i) Dir: %i\n",
-		    rollPos.x, rollPos.y, rollDir);	
+	//std::printf("New roll: (%i, %i) Dir: %i\n",
+	//	    rollPos.x, rollPos.y, rollDir);	
       }
 
       newPos = rollPos;
+
+
+      
+      int corner1Diag = 2*state->corner1.x - 3*state->corner1.y;
+      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{1, -2};
+
+      int corner2Diag = 2*state->corner2.x - 3*state->corner2.y;
+      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{1, -2};
+
+      /*
+      std::printf("Diagonals:\n  Mirror: %i\n  Corner1: %i\n  Corner2: %i\n",
+		  mirrorDiag, corner1Diag, corner2Diag);
+      */
+
 
     } break;
 
@@ -798,11 +816,11 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
       
       } else {
 
-	std::cout << "Already on the mirror\n";
+	//std::cout << "Already on the mirror\n";
 	return pos;
       }
 
-      std::cout << "Roll dir: " << rollDir << "\n";
+      //std::cout << "Roll dir: " << rollDir << "\n";
 
       bool hasPassedMirror = false;
       ivec2 rollPos = pos;
@@ -822,32 +840,45 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	**/
 	rolls++;
 
-	std::printf("New roll: (%i, %i) Dir: %i\n",
-		    rollPos.x, rollPos.y, rollDir);
+	//std::printf("New roll: (%i, %i) Dir: %i\n",
+	//	    rollPos.x, rollPos.y, rollDir);
 
 
 	if(2*rollPos.x + 3*rollPos.y <= mirrorDiag + 1 &&
 	   2*rollPos.x + 3*rollPos.y >= mirrorDiag - 1) {
 	  hasPassedMirror = true;
-	  std::cout << "Is on mirror\n";
+	  //std::cout << "Is on mirror\n";
 	  rolls++;
 
 	} else if( (rollDir == 1 && 2*rollPos.x + 3*rollPos.y <= mirrorDiag )
 		   || (rollDir == -1 && 2*rollPos.x + 3*rollPos.y >= mirrorDiag) ) {
 	  
 	  hasPassedMirror = true;
-	  std::cout << "Has passed mirror\n"; 
+	  //std::cout << "Has passed mirror\n"; 
 	}
 	
       }
 
       for(int i=0; i < rolls-1; i++) {
 	rollPos = rollPos + rollDir * ivec2{-1, -2};
-	std::printf("New roll: (%i, %i) Dir: %i\n",
-		    rollPos.x, rollPos.y, rollDir);	
+	//std::printf("New roll: (%i, %i) Dir: %i\n",
+	//	    rollPos.x, rollPos.y, rollDir);	
       }
 
       newPos = rollPos;
+
+
+      
+      int corner1Diag = 2*state->corner1.x + 3*state->corner1.y;
+      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{1, 2};
+
+      int corner2Diag = 2*state->corner2.x + 3*state->corner2.y;
+      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{1, 2};
+
+      /*
+      std::printf("Diagonals:\n  Mirror: %i\n  Corner1: %i\n  Corner2: %i\n",
+		  mirrorDiag, corner1Diag, corner2Diag);
+      */
       
     } break;
     
@@ -860,6 +891,9 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
   return newPos;
   
 }
+
+
+
 
 
 
@@ -1016,7 +1050,7 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
      
       if(tilePos.x == state->pos.x && tilePos.y == state->pos.y) {
 
-	std::printf("Supported pos (%i, %i)\n", state->pos.x, state->pos.y);
+	//std::printf("Supported pos (%i, %i)\n", state->pos.x, state->pos.y);
 	
 	isPlayerSupported = true;
 
@@ -1553,9 +1587,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
     if(memoryInfo->debugTextActive) {
       char text[256];
-      sprintf_s(text, "(%i,%i)->(%i,%i)", tile.xid, tile.yid,hexCoords.x, hexCoords.y);
-      *renderMemory = renderObject{TEXT, model.translatedX(-0.5f), viewResult.view, identity3f,0,0.f, text};
-      renderMemory++;
+
+      /**
+	 sprintf_s(text, "(%i,%i)", hexCoords.x, hexCoords.y);
+	 *renderMemory = renderObject{TEXT, model.translatedX(-0.25f), viewResult.view, identity3f,0,0.f, text};
+	 renderMemory++;
+      **/
     }
 
     
@@ -1572,14 +1609,32 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     ivec2 hexCoords;
 
     if(memoryInfo->hexMode) {
-
+      
       hexCoords = state->pos;
+
+
+      //mat2 R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
+      mat2 R = createReflectionMatrixThroughLine(0.5f);
+      //mat2 R = identity2f;
+      mat4 r = identity4;
+      r.xx = R.xx;
+      r.xy = R.xy;
+      r.yx = R.yx;
+      r.yy = R.yy;
+	  
+      model = r * model;
+
+      std::printf("Player orientation matrix:\n  %f %f\n  %f %f\n",
+		  R.xx, R.xy, R.yx, R.yy);
+
+
+      
 
       model.xw = 0.5f * (float)hexCoords.x;
       model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
 
-
       model.yw += sqrt(0.75f) - 1; //align edge of triangle with anchors
+
 
       if(isTriangleFlipped(hexCoords)) {
 	model.yw += 1.f/3.f * sqrt(0.75f);
@@ -1590,6 +1645,48 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       model.yy *= 0.80f;
 
 
+
+
+      /**
+      if(!isTriangleFlipped(hexCoords)) {
+
+	if(state->corner1.x - state->corner2.x == 2) {
+	  model.xx *= -1;
+	  
+	} else if(state->corner2.x - state->corner1.x == 1) {
+
+	  mat2 R = identity2f;
+	  
+	  if(state->corner2.y > state->corner1.y) {	    
+	    //flip like not /
+	    R = createReflectionMatrixThroughLine(2.f/3.f);
+	    
+	  } else {
+	    //flip like /
+	    R = createReflectionMatrixThroughLine(-2.f/3.f);
+	  }
+
+	  std::printf("Player orientation matrix:\n  %f %f\n  %f %f\n",
+		      R.xx, R.xy, R.yx, R.yy);
+
+	  
+
+	  mat4 r = identity4;
+	  r.xx = R.xx;
+	  r.xy = R.xy;
+	  r.yx = R.yx;
+	  r.yy = R.yy;
+	  
+	  model = r * model;
+	
+	}
+
+      }
+      **/
+      
+	
+
+      
       assert(animation_basis.zx == 0);
       assert(animation_basis.zy == 0);
       assert(animation_basis.zz == 1);
@@ -1643,33 +1740,36 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       playerPosTemp = basis * playerPosTemp;
 
       mat4 textModel = identity4.translated(playerPosTemp.x, playerPosTemp.y, 0.0f);
-    
-      sprintf_s(text, "(%i,%i)->(%i,%i)", boardPos.x, boardPos.y ,hexCoords.x, hexCoords.y);
-      *renderMemory = renderObject{TEXT, textModel.translatedX(-0.5f), viewResult.view, identity3f,0,0.f, text};
-      renderMemory++;
 
-      sprintf_s(text, "(%f,%f)", playerPosTemp.x, playerPosTemp.y);
-      *renderMemory = renderObject{TEXT, textModel.translated(-0.5f, 0.3f, 0.f), viewResult.view, identity3f,0,0.f, text};
-      renderMemory++;
+      /**
+	 sprintf_s(text, "(%i,%i)->(%i,%i)", boardPos.x, boardPos.y ,hexCoords.x, hexCoords.y);
+	 *renderMemory = renderObject{TEXT, textModel.translatedX(-0.5f), viewResult.view, identity3f,0,0.f, text};
+	 renderMemory++;
+
+	 sprintf_s(text, "(%f,%f)", playerPosTemp.x, playerPosTemp.y);
+	 *renderMemory = renderObject{TEXT, textModel.translated(-0.5f, 0.3f, 0.f), viewResult.view, identity3f,0,0.f, text};
+	 renderMemory++;
+
+      **/
       
 
       /**
-      for(int i=0; i<3; i++) {
-	mat4 vertexPos = vec3{
-	  (float) (hexCoords.x + player_vertices[3*i]),
-	  (float) (hexCoords.y + player_vertices[3*i + 1]),
-	  0.0f
-	};
+	 for(int i=0; i<3; i++) {
+	 mat4 vertexPos = vec3{
+	 (float) (hexCoords.x + player_vertices[3*i]),
+	 (float) (hexCoords.y + player_vertices[3*i + 1]),
+	 0.0f
+	 };
 	
-	vertexPos = basis * vertexPos;
+	 vertexPos = basis * vertexPos;
 
-	mat4 vertexTextModel = identity4.translated{vertexPos.x, vertexPos.y, 0.0f);
+	 mat4 vertexTextModel = identity4.translated{vertexPos.x, vertexPos.y, 0.0f);
     
-	sprintf_s(text, "(%f,%f)", vertexPos.x, vertexPos.y);
-	*renderMemory = renderObject{TEXT, vertexTextModel, viewResult.view, identity3f,0,0.f, text};
-	renderMemory++;
+	 sprintf_s(text, "(%f,%f)", vertexPos.x, vertexPos.y);
+	 *renderMemory = renderObject{TEXT, vertexTextModel, viewResult.view, identity3f,0,0.f, text};
+	 renderMemory++;
 		 
-      }
+	 }
       **/
 
       
@@ -1878,8 +1978,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	  mat4 textModel = anchorModel;
 	  //textModel.xw -= 0.5;
 	  char text[256];
-	  sprintf_s(text, "(%i,%i)>(%i,%i)", xid, yid, hexCoords.x, hexCoords.y);
-	  *renderMemory = renderObject{TEXT, textModel, viewResult.view, identity3f,0,0.f, text};
+	  sprintf_s(text, "(%i,%i)", hexCoords.x, hexCoords.y);
+	  *renderMemory = renderObject{TEXT, textModel.translatedX(0.1f), viewResult.view, identity3f,0,0.f, text};
 	  renderMemory++;
 	}
 
@@ -2090,14 +2190,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.95f, 0.f),
       identity4,identity3f,0,0.f, text};
     renderMemory++;
-    
-    ivec2 hexPlayerPos = hexBoardToLinearSpace(levelInfo->player_pos_original);
-    sprintf_s(text, "Original player pos:  board(%i,%i)   hex(%i,%i)",
-	      levelInfo->player_pos_original.x, levelInfo->player_pos_original.y,
-	      hexPlayerPos.x, hexPlayerPos.y);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.90f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
 
     sprintf_s(text, "Current player pos (in linear space): (%i,%i)",
 	      state->pos.x, state->pos.y);
@@ -2117,7 +2209,20 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     renderMemory++;
 
     
+    sprintf_s(text, "Player dir: %i", state->dir);
+    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.70f, 0.f),
+      identity4,identity3f,0,0.f, text};
+    renderMemory++;
+    
+    sprintf_s(text, "Player corner 1: (%i, %i)", state->corner1.x, state->corner1.y);
+    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.65f, 0.f),
+      identity4,identity3f,0,0.f, text};
+    renderMemory++;
 
+    sprintf_s(text, "Player corner 2: (%i, %i)", state->corner2.x, state->corner2.y);
+    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.60f, 0.f),
+      identity4,identity3f,0,0.f, text};
+    renderMemory++;
 
     
     ivec2 mirrorPos = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
