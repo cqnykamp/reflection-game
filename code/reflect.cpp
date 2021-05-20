@@ -1,3 +1,9 @@
+/**
+KNOWN BUGS:
+- incorrect player positioning when y below 0
+- background tiling only includes some valid mirrors but not all
+**/
+
 //TODO: use aliases for game state structs on some functions?
 
 #include "reflect.h"
@@ -1611,57 +1617,50 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       
       model.xx *= 0.80f;
       model.yy *= 0.80f;
-
-      //mat2 R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
-      //mat2 R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
-      //mat2 R = identity2f;
-
-
-      
-      //      if(!isTriangleFlipped(hexCoords)) {
-
       if(isTriangleFlipped(hexCoords)) {
 	model.yy *= -1;
       }
 
-	ivec2 c1 = state->corner1;
-	ivec2 c2 = state->corner2;
 
-	mat2 R = identity2f;
+      //Corner orientation
+      
+      ivec2 c1 = state->corner1;
+      ivec2 c2 = state->corner2;
+      mat2 R = identity2f;
 
-	if(c2.x < c1.x) {
-	  model.xx *= -1;
+      if(c2.x < c1.x) {
+	model.xx *= -1;
 
-	  if(c1.y == c2.y) {
-	    //do nothing
-	  } else if(c1.y > c2.y) {
-	    R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
-	  } else {
-	    R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
-	  }
-		
+	if(c1.y == c2.y) {
+	  //do nothing
+	} else if(c1.y > c2.y) {
+	  R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
 	} else {
-
-	  if(c1.y == c2.y) {
-	    //do nothing
-	  } else if(c1.y > c2.y) {
-	    R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
-	  } else {
-	    R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
-	  }
-
+	  R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
+	}
+		
+      } else {
+	if(c1.y == c2.y) {
+	  //do nothing
+	} else if(c1.y > c2.y) {
+	  R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
+	} else {
+	  R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
 	}
 
-	mat4 r = identity4;
-	r.xx = R.xx;
-	r.xy = R.xy;
-	r.yx = R.yx;
-	r.yy = R.yy;
+      }
+      mat4 r = identity4;
+      r.xx = R.xx;
+      r.xy = R.xy;
+      r.yx = R.yx;
+      r.yy = R.yy;
 	  
-	model = r * model;
+      model = r * model;
 
-	//      }
 
+
+      //Shift to correct board position
+	
       model.xw = 0.5f * (float)hexCoords.x;
       model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
 
@@ -1670,11 +1669,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
       if(isTriangleFlipped(hexCoords)) {
 	model.yw += 1.f/3.f * sqrt(0.75f);
-	//model.yy *= -1;
       }
-      
-	
 
+
+      
       
       assert(animation_basis.zx == 0);
       assert(animation_basis.zy == 0);
