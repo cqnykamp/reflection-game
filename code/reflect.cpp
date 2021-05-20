@@ -594,6 +594,13 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 
       int mirrorDiag = 2*mirrorPos.x - mirrorPos.y;
 
+      
+      int corner1Diag = 2 * state->corner1.x - state->corner1.y;
+      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{3, -2};
+      int corner2Diag = 2 * state->corner2.x - state->corner2.y;
+      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{3, -2};
+
+
       int rollDir;
       if( 2*pos.x - pos.y > mirrorDiag) {
 	rollDir = 1;
@@ -645,23 +652,19 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 
       newPos = rollPos;
 
-
-      int corner1Diag = 2 * state->corner1.x - state->corner1.y;
-      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{3, -2};
-
-      int corner2Diag = 2 * state->corner2.x - state->corner2.y;
-      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{3, -2};
-
-      /*
-      std::printf("Diagonals:\n  Mirror: %i\n  Corner1: %i\n  Corner2: %i\n",
-		  mirrorDiag, corner1Diag, corner2Diag);
-      */
       
     } break;
 
   case 4:
     {
       int mirrorDiag = 2*mirrorPos.x + mirrorPos.y;
+
+      
+      int corner1Diag = 2 * state->corner1.x + state->corner1.y;
+      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{3, 2};
+      int corner2Diag = 2 * state->corner2.x + state->corner2.y;
+      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{3, 2};
+
 
       int rollDir;
       if( 2*pos.x + pos.y > mirrorDiag) {
@@ -714,19 +717,23 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 
       newPos = rollPos;
 
-      int corner1Diag = 2 * state->corner1.x + state->corner1.y;
-      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{3, 2};
-
-      int corner2Diag = 2 * state->corner2.x + state->corner2.y;
-      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{3, 2};
-
 
     } break;
 
 
   case 1:
     {
+      
       int mirrorDiag = 2*mirrorPos.x - 3* mirrorPos.y;
+
+      
+      int corner1Diag = 2*state->corner1.x - 3*state->corner1.y;
+      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{1, -2};
+      int corner2Diag = 2*state->corner2.x - 3*state->corner2.y;
+      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{1, -2};
+      /*std::printf("Diagonals:\n  Mirror: %i\n  Corner1: %i\n  Corner2: %i\n",
+		  mirrorDiag, corner1Diag, corner2Diag);
+      */
 
       int rollDir;
       if( 2*pos.x - 3*pos.y > mirrorDiag + 1) {
@@ -785,20 +792,10 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 	//	    rollPos.x, rollPos.y, rollDir);	
       }
 
+
+
       newPos = rollPos;
 
-
-      
-      int corner1Diag = 2*state->corner1.x - 3*state->corner1.y;
-      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{1, -2};
-
-      int corner2Diag = 2*state->corner2.x - 3*state->corner2.y;
-      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{1, -2};
-
-      /*
-      std::printf("Diagonals:\n  Mirror: %i\n  Corner1: %i\n  Corner2: %i\n",
-		  mirrorDiag, corner1Diag, corner2Diag);
-      */
 
 
     } break;
@@ -807,6 +804,15 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
     {
 
       int mirrorDiag = 2*mirrorPos.x + 3* mirrorPos.y;
+
+      
+      int corner1Diag = 2*state->corner1.x + 3*state->corner1.y;
+      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{1, 2};
+      int corner2Diag = 2*state->corner2.x + 3*state->corner2.y;
+      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{1, 2};
+      /*std::printf("Diagonals:\n  Mirror: %i\n  Corner1: %i\n  Corner2: %i\n",
+		  mirrorDiag, corner1Diag, corner2Diag);
+      */
 
       int rollDir;
       if( 2*pos.x + 3*pos.y > mirrorDiag + 1) {
@@ -868,23 +874,14 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
       newPos = rollPos;
 
 
-      
-      int corner1Diag = 2*state->corner1.x + 3*state->corner1.y;
-      state->corner1 = state->corner1 + ((mirrorDiag - corner1Diag) / 4) * ivec2{1, 2};
-
-      int corner2Diag = 2*state->corner2.x + 3*state->corner2.y;
-      state->corner2 = state->corner2 + ((mirrorDiag - corner2Diag) / 4) * ivec2{1, 2};
-
-      /*
-      std::printf("Diagonals:\n  Mirror: %i\n  Corner1: %i\n  Corner2: %i\n",
-		  mirrorDiag, corner1Diag, corner2Diag);
-      */
-      
     } break;
     
     
   default: {
     newPos = pos;
+
+    std::cout << "Unreadable mirror. Doing nothing\n";
+    
   }
   }
 
@@ -1611,24 +1608,59 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     if(memoryInfo->hexMode) {
       
       hexCoords = state->pos;
-
+      
+      model.xx *= 0.80f;
+      model.yy *= 0.80f;
 
       //mat2 R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
-      mat2 R = createReflectionMatrixThroughLine(0.5f);
+      //mat2 R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
       //mat2 R = identity2f;
-      mat4 r = identity4;
-      r.xx = R.xx;
-      r.xy = R.xy;
-      r.yx = R.yx;
-      r.yy = R.yy;
-	  
-      model = r * model;
-
-      std::printf("Player orientation matrix:\n  %f %f\n  %f %f\n",
-		  R.xx, R.xy, R.yx, R.yy);
 
 
       
+      //      if(!isTriangleFlipped(hexCoords)) {
+
+      if(isTriangleFlipped(hexCoords)) {
+	model.yy *= -1;
+      }
+
+	ivec2 c1 = state->corner1;
+	ivec2 c2 = state->corner2;
+
+	mat2 R = identity2f;
+
+	if(c2.x < c1.x) {
+	  model.xx *= -1;
+
+	  if(c1.y == c2.y) {
+	    //do nothing
+	  } else if(c1.y > c2.y) {
+	    R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
+	  } else {
+	    R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
+	  }
+		
+	} else {
+
+	  if(c1.y == c2.y) {
+	    //do nothing
+	  } else if(c1.y > c2.y) {
+	    R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
+	  } else {
+	    R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
+	  }
+
+	}
+
+	mat4 r = identity4;
+	r.xx = R.xx;
+	r.xy = R.xy;
+	r.yx = R.yx;
+	r.yy = R.yy;
+	  
+	model = r * model;
+
+	//      }
 
       model.xw = 0.5f * (float)hexCoords.x;
       model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
@@ -1638,51 +1670,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
       if(isTriangleFlipped(hexCoords)) {
 	model.yw += 1.f/3.f * sqrt(0.75f);
-	model.yy *= -1;
+	//model.yy *= -1;
       }
-
-      model.xx *= 0.80f;
-      model.yy *= 0.80f;
-
-
-
-
-      /**
-      if(!isTriangleFlipped(hexCoords)) {
-
-	if(state->corner1.x - state->corner2.x == 2) {
-	  model.xx *= -1;
-	  
-	} else if(state->corner2.x - state->corner1.x == 1) {
-
-	  mat2 R = identity2f;
-	  
-	  if(state->corner2.y > state->corner1.y) {	    
-	    //flip like not /
-	    R = createReflectionMatrixThroughLine(2.f/3.f);
-	    
-	  } else {
-	    //flip like /
-	    R = createReflectionMatrixThroughLine(-2.f/3.f);
-	  }
-
-	  std::printf("Player orientation matrix:\n  %f %f\n  %f %f\n",
-		      R.xx, R.xy, R.yx, R.yy);
-
-	  
-
-	  mat4 r = identity4;
-	  r.xx = R.xx;
-	  r.xy = R.xy;
-	  r.yx = R.yx;
-	  r.yy = R.yy;
-	  
-	  model = r * model;
-	
-	}
-
-      }
-      **/
       
 	
 
