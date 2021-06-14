@@ -1,6 +1,6 @@
+
 /**
 KNOWN BUGS:
-- incorrect player positioning when y below 0
 - background tiling only includes some valid mirrors but not all
 **/
 
@@ -287,11 +287,11 @@ bool isNearbyAnchor(LevelInfo *levelInfo, vec2 coord, float maxAcceptableDistanc
 
 bool isTriangleFlipped(ivec2 hexCoords) {
   bool flipped = false;
-  if( (hexCoords.x + hexCoords.y) % 2 == 1) {
+  if( (hexCoords.x + hexCoords.y + 200) % 2 == 1) {
     flipped = !flipped;
   }
 
-  if( (int)floor((float)hexCoords.y / 2.f) % 2 == 1) {
+  if( ((int)floor((float)hexCoords.y / 2.f) + 200) % 2 == 1) {
     flipped = !flipped;
   }
 
