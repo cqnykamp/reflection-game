@@ -49,11 +49,14 @@ goto END
 
 :ProcessNotFound
 
-cl %CommonCompilerFlags% ..\code\sdl_reflect.cpp gl.c /link %CommonLinkerFlags% /LIBPATH:%Plibs% SDL2.lib SDL2main.lib opengl32.lib freetype.lib
+cl %CommonCompilerFlags% ..\code\sdl_reflect.cpp gl.c /link %CommonLinkerFlags% /LIBPATH:%Plibs% SDL2.lib SDL2main.lib opengl32.lib freetype.lib user32.lib
 
 goto END
 
 
 
 :END
+
+echo Done
+
 popd

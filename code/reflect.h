@@ -7,16 +7,14 @@
 
 #define PI 3.1415926535897932384626433f
 
+// Assert
 #ifdef REFLECT_INTERNAL
-
 #define assert(expression) \
   if(!(expression)) {*(int *)0 = 0;}
-
 #else
-
 #define assert
-
 #endif
+
 
 #include<vector>
 
@@ -37,10 +35,6 @@ typedef float real32;
 typedef double real64;
 
 #include <string>
-
-
-
-
 
 
 struct LoadedLevel {
@@ -75,7 +69,7 @@ typedef UPDATE_RENDER_CONTEXT_VERTICES(UpdateRenderContextVertices);
 #define DEBUG_LOG(name) void name(char text[])
 typedef DEBUG_LOG(DebugLog);
 
-#define CREATE_NEW_RENDER_OBJECT(name) void name(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath, RenderContext context)
+#define CREATE_NEW_RENDER_OBJECT(name) void name(float vertices[], int verticesLength, unsigned int indices[], int indicesLength, char *filePath, RenderContext context, char *textureName, bool outputWithTransparency)
 typedef CREATE_NEW_RENDER_OBJECT(CreateNewRenderObject);
 
 
@@ -103,6 +97,7 @@ struct gameInput {
   uint32 deltaTime;
   controllerInput controllers[4];
 };
+
 
 struct renderObject {
   RenderContext renderContext;

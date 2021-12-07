@@ -2,3 +2,9 @@ build/
 deploy/
 exported/
 old/
+.vscode/
+assets/
+data/textures/
+*.pdb
+*.exe
+*.manifest

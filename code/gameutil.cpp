@@ -2,7 +2,7 @@
 
 
 #include <cmath>
-
+#include <iostream>
 
 
 float max(float a, float b) {
@@ -344,6 +344,10 @@ mat4 operator*(mat4 a, mat4 b) {
   };
 }
 
+
+std::string formatMat(mat4 m) {
+  return "1, 2, 3, 4";
+}
 
 
 /** NOTE: not sure if this works

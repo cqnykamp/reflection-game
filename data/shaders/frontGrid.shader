@@ -62,8 +62,8 @@ void main() {
   int level_height = 100;
   
 
-  float fade_length = 3.5;
-  float fade_offset = 0.;
+  // float fade_length = 3.5;
+  // float fade_offset = 0.;
 
   /**
   // Discard if off the board and past fade-out
@@ -77,13 +77,34 @@ void main() {
 
   //vec2 uv = fract(uvRaw);
 
+  // FragColor = vec4(uvRaw.x / 10, uvRaw.y / 10, 0, 1);
+  // return;
+
   float uvy = uvRaw.y / sqrt(0.75f);
   
-  vec2 uvHexRaw = vec2(uvRaw.x + 0.5f * abs( mod(uvy - 1.f, 2.f) - 1.f),
-		    //		 uvRaw.y * sqrt(0.75f));
-		    uvy);
+  // vec2 uvHexRaw = vec2(uvRaw.x + 0.5f * , uvy);
+  vec2 uvHexRaw = vec2(uvRaw.x + 0.5f * abs( mod(uvy - 1.f, 2.f) - 1.f), uvy);
+
+  vec2 uvHexAnchorId = ivec2(uvHexRaw);
+
+  // FragColor = vec4(uvHexInt.x / 10.f, uvHexInt.y / 10.f, 0.0f, 1.f);
+  // return;
+
+  vec2 uvHexAnchor = vec2(uvHexAnchorId.x, uvHexAnchorId.y * sqrt(0.75f));
+
+  float d = distance(uvHexAnchor, uvRaw);
+  float test = step(d, 0.2);
+
+  // FragColor = vec4(uvHexAnchorId.x / 10.f, uvHexAnchorId.y / 10.f, 0, 1);
+  // return;
+
+  //vec2 p = uvRaw 
 
   vec2 uvHex = fract(uvHexRaw);
+
+  // FragColor = vec4(uvHex.x, uvHex.y, 0.0f, 1.0f);
+  // return;
+
   /*
     squareCoords.x + 0.5f * abs( fmod(squareCoords.y - 1.f, 2.f) - 1.f),
     squareCoords.y * sqrt(0.75f)
@@ -94,14 +115,18 @@ void main() {
 
   float borderwidth = 0.05;
 
-  float not_border = (1.0-step(1.-borderwidth, uvHex.x))
+  float not_border = 
+      (1.0-step(1.-borderwidth, uvHex.x))
     * (1.0-step(1.-borderwidth, uvHex.y))
     * (1.0-step(1.-borderwidth, 1.0-uvHex.x))
     * (1.0-step(1.-borderwidth, 1.0-uvHex.y));
 
   float diagwidth = 0.05;
-  float not_diag = step(diagwidth, abs(uvHex.x-uvHex.y))
-    * step(diagwidth, abs(uvHex.x + uvHex.y - 1.));
+  float not_diag = step(diagwidth, abs(uvHex.x-uvHex.y));
+    // * step(diagwidth, abs(uvHex.x + uvHex.y - 1.));
+
+  // FragColor = vec4(not_diag, 0.0f, 0.0f, 1.0f);
+  // return;
 
 
   if(not_border ==1. && not_diag==1.) {

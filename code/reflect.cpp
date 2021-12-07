@@ -1,18 +1,21 @@
 
 /**
 KNOWN BUGS:
-- background tiling only includes some valid mirrors but not all
+- square mode: player does not move to correct location: bug in order of transformations
+TODO:
+- find alternative to memoryInfo->debugLog()
 **/
-
-//TODO: use aliases for game state structs on some functions?
 
 #include "reflect.h"
 
 #include "gameutil.cpp"
 
+#include "DebugOverlay.cpp"
+
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cstdarg>
 
 #define MOUSE_HOVER_SNAP_DIST  1.0f
 #define MOUSE_DRAG_SNAP_DIST 0.4f
@@ -24,10 +27,23 @@ KNOWN BUGS:
 
 #define SLEEP_DURATION 600 // milliseconds
 
+
+const float mirror_vertices[] = {
+  0.0f, 0.0f, 0.0f,     0.0f, 0.0f,
+  0.0f, 1.0f, 0.0f,     0.0f, 1.0f,
+  1.0f, 1.0f, 0.0f,     1.0f, 1.0f,
+  1.0f, 0.0f, 0.0f,     1.0f, 0.0f
+};
+
+
 struct GameState {
   bool game_ended;
   int levelCount;
   int active_level;
+};
+
+struct MouseHistory {
+  vec2 hist[30];
 };
 
 struct Tile {
@@ -84,16 +100,29 @@ struct LevelState {
   int hexMirrorAngleId;
 
 
+  float mirror_vertices[20];
+
+
   //NOTE: only for hex mode, updates throughout level
   ivec2 pos;
-  int dir;
   ivec2 corner1;
-  ivec2 corner2;
-  
+  ivec2 corner2;  
   
 };
 
 
+struct MemoryArena {
+  GameState gameState;
+  LevelInfo levelInfo;
+  LevelState levelState;
+  MouseHistory mouseHistory;
+  
+};
+
+
+
+
+//unused
 float customMod(float num, float base) {
   float result = num;
   if(result < 0) {
@@ -386,7 +415,8 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
 
   unsigned int bufferid;
 
-  memoryInfo->debugLog("");
+  // memoryInfo->debugLog("");
+  
 
 
   /**
@@ -494,7 +524,6 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
 
 
 	  }
-
 	}
 
       }
@@ -530,6 +559,10 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
   state->hexTargetBasis = state->hexBasis;
 
 
+  for(int i=0; i<20; i++) {
+    state->mirror_vertices[i] = mirror_vertices[i];
+  }
+
   state->pos = ivec2{
     levelInfo->player_pos_original.x + 1,
     levelInfo->player_pos_original.y * 2  + 1};
@@ -543,8 +576,6 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
     state->corner2 = state->pos + ivec2{ 1, -1};
 
   }
-
-  state->dir = 0;
   
   std::printf("Player pos (updating): (%i, %i)\n",
 	      state->pos.x, state->pos.y);
@@ -553,7 +584,6 @@ void loadLevel(gameMemory *memoryInfo, GameState *gameState, LevelInfo *levelInf
   vec2 playerRenderPos = hexLinearSpaceToRenderSpace(levelInfo->player_pos_original);
   std::printf("(%f, %f)\n", playerRenderPos.x, playerRenderPos.y);
 }
-
 
 
 //Input: hex player pos (not neccessarily level starting pos)
@@ -581,7 +611,6 @@ ivec2 findNewPlayerPos(LevelState *state, ivec2 pos) {
 
       state->corner1.y = 2 * mirrorPos.y - state->corner1.y;
       state->corner2.y = 2 * mirrorPos.y - state->corner2.y;
-      
       
     } break;
     
@@ -1079,7 +1108,7 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
 
       if(isPlayerOnGoal) {
 	std::cout << "LEVEL COMPLETE!";
-	memoryInfo->debugLog("Level complete!");
+	// memoryInfo->debugLog("Level complete!");
 
       }
       
@@ -1192,12 +1221,12 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
 	 levelInfo->tiles[supporting_tile_id].type == 2 &&
 	 levelInfo->tiles[secondPlayerSupportingTile].type == 2) {
 	std::cout << "LEVEL COMPLETE!";
-	memoryInfo->debugLog("Level complete!");
+	// memoryInfo->debugLog("Level complete!");
 
       } else if(!levelInfo->hasSecondPlayer &&
 		levelInfo->tiles[supporting_tile_id].type == 2) {
 	std::cout << "LEVEL COMPLETE!";
-	memoryInfo->debugLog("Level Complete!");
+	// memoryInfo->debugLog("Level Complete!");
       }
     }
 
@@ -1205,56 +1234,48 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
 }
 
 
-void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMode) {
+void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMode, LevelState *state) {
     float background_vertices[] = {
-      -50.0f, -50.0f, 0.0f, 
-      -50.0f, 50.0f, 0.0f,  
-      50.0f, 50.0f, 0.0f,   
-      50.0f, -50.0f, 0.0f,  
+      //positions             //texture coords
+      -50.0f, -50.0f, 0.0f,   0.0f,   0.0f,
+      -50.0f,  50.0f, 0.0f,   0.0f,   100.0f,
+       50.0f,  50.0f, 0.0f,   100.0f, 100.0f,
+       50.0f, -50.0f, 0.0f,   100.0f,   0.0f
     };
     unsigned int background_indices[] = {
       0, 1, 2,
       2, 3, 0
     };
-    createNewRenderObject(background_vertices, 12, background_indices, 6, "shaders/background.shader", BACKGROUND);
+    createNewRenderObject(background_vertices, 20, background_indices, 6, "shaders/entity.shader", BACKGROUND, "water.jpg", false);
     
     if(hexMode) {
       
       float floor_vertices[] = {
-	-0.5f, -1.f/3.f * sqrt(0.75f), 0.f, //left
-	 0.5f, -1.f/3.f * sqrt(0.75f), 0.f, //right
-	 0.0f,  2.f/3.f * sqrt(0.75f), 0.f //bottom
+      	-0.5f, -1.f/3.f * sqrt(0.75f), 0.f, 0.0f, 0.0f, //left
+      	 0.5f, -1.f/3.f * sqrt(0.75f), 0.f, 1.0f, 0.0f,//right
+      	 0.0f,  2.f/3.f * sqrt(0.75f), 0.f, 0.5f, 1.0f//bottom
       };
 
-
-      /**
-      float floor_vertices[] = {
-	-1.0f, -1.0f, 0.0f,
-	1.0f, -1.0f, 0.0f,
-	0.0f, 1.0f, 0.0f
-      };
-      **/
-    
-      unsigned int floor_indices[] = {
-	0, 1, 2
-      };
+      unsigned int floor_indices[] = {0, 1, 2};
 	
-      createNewRenderObject(floor_vertices, 9, floor_indices, 3,
-			    "shaders/floorTile.shader", FLOOR_TILE);
+      createNewRenderObject(floor_vertices, 15, floor_indices, 3,
+      	  "shaders/entity.shader", FLOOR_TILE, "container.jpg", false);
       
     } else {
       float floor_vertices[] = {
-	0.0f, 0.0f, 0.0f,
-	1.0f, 0.0f, 0.0f,
-	1.0f, 1.0f, 0.0f,
-	0.0f, 1.0f, 0.0f
+        //Vertex coords     //Tex Coords
+	      0.0f, 0.0f, 0.0f,   0.0f, 0.0f,
+      	1.0f, 0.0f, 0.0f,   1.0f, 0.0f,
+      	1.0f, 1.0f, 0.0f,   1.0f, 1.0f,
+      	0.0f, 1.0f, 0.0f,   0.0f, 1.0f,
       };  
       unsigned int floor_indices[] = {
 	0, 1, 2,
 	2, 3, 0
       };
-      createNewRenderObject(floor_vertices, 12, floor_indices, 6,
-			    "shaders/floorTile.shader", FLOOR_TILE);
+
+      createNewRenderObject(floor_vertices, 20, floor_indices, 6,
+			    "shaders/entity.shader", FLOOR_TILE, "awesomeface.png", false);
 
     }
 
@@ -1262,116 +1283,126 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
       float pad = 0.0f;
 
       float player_vertices[] = {
-	-0.5f, -1.f/3.f * sqrt(0.75f), 0.f, //left
-	0.5f, -1.f/3.f * sqrt(0.75f), 0.f, //right
-	0.0f,  2.f/3.f * sqrt(0.75f), 0.f //bottom
+      	-0.5f, -1.f/3.f * sqrt(0.75f), 0.f,   0.0f, 0.0f, //left
+      	 0.5f, -1.f/3.f * sqrt(0.75f), 0.f,   1.0f, 0.0f, //right
+      	 0.0f,  2.f/3.f * sqrt(0.75f), 0.f,   0.5f, 1.0f  //bottom
       };
-
-      /**
-      float player_vertices[] = {
-	-1.0f + pad, -1.0f + pad, 0.0f,
-	1.0f - pad, -1.0f + pad, 0.0f,
-	0.0f, 1.0f - pad, 0.0f
-      };
-      **/
-
     
       unsigned int player_indices[] = {
 	0, 1, 2
       };
 
-      createNewRenderObject(player_vertices, 9, player_indices, 3,
-			    "shaders/player.shader", PLAYER);
+      createNewRenderObject(player_vertices, 15, player_indices, 3,
+			    "shaders/entity.shader", PLAYER, "wall.jpg", false);
 
 
     } else {
       float player_vertices[] = {
-	0.15f, 0.15f, 0.0f,
-	0.85f, 0.15f, 0.0f,
-	0.85f, 0.85f, 0.0f,
-	0.15f, 0.85f, 0.0f,
+      	0.15f, 0.15f, 0.0f, 0.0f, 0.0f,
+      	0.85f, 0.15f, 0.0f, 1.0f, 0.0f,
+      	0.85f, 0.85f, 0.0f, 1.0f, 1.0f,
+      	0.15f, 0.85f, 0.0f, 0.0f, 1.0f
       };
       unsigned int player_indices[] = {
 	0, 1, 2,
 	2, 3, 0
       };
-      createNewRenderObject(player_vertices, 12, player_indices, 6,
-			    "shaders/player.shader", PLAYER);
+      createNewRenderObject(player_vertices, 20, player_indices, 6,
+			    "shaders/entity.shader", PLAYER, "container.jpg", false);
 
     }
     
 
     float anchor_vertices[] = {
-      -1.0f, -1.0f, 0.0f,
-      -1.0f, 1.0f, 0.0f,
-      1.0f, 1.0f, 0.0f,
-      1.0f, -1.0f, 0.0f,
+      -0.1f, -0.1f, 0.0f,    0.0f, 0.0f,
+      -0.1f,  0.1f, 0.0f,    0.0f, 1.0f,
+       0.1f,  0.1f, 0.0f,    1.0f, 1.0f,
+       0.1f, -0.1f, 0.0f,    1.0f, 0.0f
     };
     unsigned int anchor_indices[] = {
       0, 1, 2,
       2, 3, 0
     };
-    createNewRenderObject(anchor_vertices, 12, anchor_indices, 6, "shaders/anchor.shader", ANCHOR);
+    createNewRenderObject(anchor_vertices, 20, anchor_indices, 6, "shaders/entity.shader", ANCHOR, "awesomeface.png", false);
 	
-    float mirror_vertices[] = {
-      0.0f, 0.0f, 0.0f,
-      0.0f, 1.0f, 0.0f,
-      1.0f, 1.0f, 0.0f,
-      1.0f, 0.0f, 0.0f,
-    };
+
+    for(int i=0; i<20; i++) {
+      state->mirror_vertices[i] = mirror_vertices[i];
+    }
+
     unsigned int mirror_indices[] = {
       0, 1, 2,
       2, 3, 0
     };
-    createNewRenderObject(mirror_vertices, 12, mirror_indices, 6, "shaders/mirror.shader", MIRROR);
+    createNewRenderObject(state->mirror_vertices, 20, mirror_indices, 6, "shaders/entity.shader", MIRROR, "container.jpg", false);
 
-    float front_grid_vertices[] = {
-      -50.f, -50.f, 0.0f,
-      -50.f, 50.0f, 0.0f,
-      50.0f, 50.0f, 0.0f,
-      50.0f, -50.0f, 0.0f
-    };
-    unsigned int front_grid_indices[] = {
-      0, 1, 2,
-      2, 3, 0
-    };
     if(hexMode) {
-      createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6,
-			    "shaders/frontGrid.shader", FRONT_GRID);
+
+        float front_grid_vertices[] = {
+        // vertex coords         //tex coords
+        -3.0f,   -2.0f * sqrt(0.75f), 0.0f,  0.0f, 0.0f,
+        -3.0f,   11.0f * sqrt(0.75f), 0.0f,  0.0f, 6.5f,
+         10.0f,  11.0f * sqrt(0.75f), 0.0f,  13.0f, 6.5f,
+         10.0f,  -2.0f * sqrt(0.75f), 0.0f,  13.0f, 0.0f
+      };
+
+      unsigned int front_grid_indices[] = {
+        0, 1, 2,
+        2, 3, 0
+      };
+
+      createNewRenderObject(front_grid_vertices, 20, front_grid_indices, 6, "shaders/entity.shader", FRONT_GRID, "triangle_overlay.png", true);
+
+
+
+
     } else {
-      createNewRenderObject(front_grid_vertices, 12, front_grid_indices, 6,
-			    "shaders/frontGrid_square.shader", FRONT_GRID);
+
+      // float imgWidthPerTile = 1.0f;
+      // float imgHeightPerTile = 1.0f;
+
+      float front_grid_vertices[] = {
+        // vertex coords         //tex coords
+        -3.0f,  -3.0f, 0.0f,  0.0f, 0.0f,
+        -3.0f,   10.0f, 0.0f,  0.0f, 13.0f,
+         10.0f,  10.0f, 0.0f,  13.0f, 13.0f,
+         10.0f,  -3.0f, 0.0f,  13.0f, 0.0f
+      };
+
+      // float front_grid_vertices[] = {
+      //   //vertex coords     // tex coords
+      //   0.0f, 0.0f, 0.f,   0.0f, 0.0f,
+      //   1.0f, 0.0f, 0.f,   1.0f, 0.0f,
+      //   1.0f, 1.0f, 0.f,   1.0f, 1.0f,
+      //   0.0f, 1.0f, 0.f,   0.0f, 1.0f
+      // };
+
+      unsigned int front_grid_indices[] = {
+        0, 1, 2,
+        2, 3, 0
+      };
+
+      createNewRenderObject(front_grid_vertices, 20, front_grid_indices, 6, "shaders/entity.shader", FRONT_GRID, "square_overlay.png", true);
 
     }
 }
 
 
 
+//Main loop
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
   controllerInput controller = input.controllers[0];
 
-  /**
-  std::cout << "Game state size:  "<< sizeof(GameState) << "\n";
-  std::cout << "Level info size:  "<< sizeof(LevelInfo) << "\n";
-  std::cout << "Level state size: "<< sizeof(LevelState) << "\n";
-  */
-
-  GameState *gameState = (GameState *) (memoryInfo->permanentStorage);
-  LevelInfo *levelInfo = (LevelInfo *) (gameState + 1);
-  LevelState *state = (LevelState *) (levelInfo + 1);
-
-  //Make sure that our memory layout is contiguous
-  assert( (char*)gameState == (char*) memoryInfo->permanentStorage);
-  assert( (char*)gameState + sizeof(GameState) == (char*)levelInfo);
-  assert( (char*)levelInfo + sizeof(LevelInfo) == (char*)state);
-
   //Make sure that we do not overrun our alloted space
-  assert( (char*)state+sizeof(LevelState) - (char*)memoryInfo->permanentStorage < memoryInfo->permanentStorageSize);
+  assert(sizeof(MemoryArena) <= memoryInfo->permanentStorageSize);
 
+  MemoryArena *memoryArena = (MemoryArena *) (memoryInfo->permanentStorage);
 
-  //levelInfo->player_pos_original = ivec2{5,5};
-
+  GameState *gameState= &memoryArena->gameState;
+  LevelInfo *levelInfo = &memoryArena->levelInfo;
+  LevelState *state = &memoryArena->levelState;
+  MouseHistory *mouseHistory = &memoryArena->mouseHistory;
 
   void *tempMemory = memoryInfo->temporaryStorage;
 
@@ -1385,7 +1416,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     std::cout << "Using hex " << memoryInfo->hexMode << "\n";
     memoryInfo->isDllFirstFrame = false;
 
-    loadRenderObjects(memoryInfo->createNewRenderObject, memoryInfo->hexMode);
+    loadRenderObjects(memoryInfo->createNewRenderObject, memoryInfo->hexMode, state);
   }
   
   
@@ -1426,6 +1457,13 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
   
   vec2 mouse_coords = vec2(coord_orig.x, coord_orig.y);
+
+
+
+  // for(int i = 1; i < 30; i++) {
+  //   mouseHistory->hist[i - 1] = mouseHistory->hist[i];
+  // }
+  // mouseHistory->hist[30] = mouse_coords;
 
   // Animation basis
   if(state->sleep_active && input.currentTime >= state->sleepStartTime + SLEEP_DURATION) {
@@ -1541,14 +1579,16 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
 
-
+  //Init render list
+  renderObject *renderMemory = renderMemoryInfo->memory;
   
   //Background
-  renderObject *renderMemory = renderMemoryInfo->memory;
   *renderMemory = renderObject {BACKGROUND, identity4, viewResult.view};
   renderMemory++;
   
-  
+
+  // std::cout << " ## Rendering floor tiles ##\n";
+
   //Floor tiles
   for(int i=0; i<levelInfo->activeTiles; i++) {
     mat4 model = identity4;
@@ -1579,7 +1619,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       model.yw = (float) levelInfo->tiles[i].yid;
 
     }
-    
+
+
     *renderMemory = renderObject {FLOOR_TILE, model, viewResult.view};
     if(levelInfo->tiles[i].type == 2) {
       renderMemory->highlight_key = 1;
@@ -1587,6 +1628,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       renderMemory->highlight_key = 0;
     }
     renderMemory++;
+    // std::cout << "  Here's one\n" << formatMat(model) << '\n';
 
     if(memoryInfo->debugTextActive) {
       char text[256];
@@ -1600,6 +1642,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
     
   }
+
+  std::cout << "\n";
 
 
   
@@ -1668,7 +1712,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
       if(isTriangleFlipped(hexCoords)) {
-	model.yw += 1.f/3.f * sqrt(0.75f);
+	      model.yw += 1.f/3.f * sqrt(0.75f);
       }
 
 
@@ -1687,26 +1731,50 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
       //std::printf("X: (%f,%f) Y: (%f,%f) Z:(%f,%f)\n", xcol.x, xcol.y, ycol.x, ycol.y, zcol.x, zcol.y);
       
-      basis = {
-	xcol.x, ycol.x, zcol.x,
-	xcol.y, ycol.y, zcol.y,
-	0, 0, 1
-      };
+      // basis = {
+	    //   xcol.x, ycol.x, zcol.x,
+	    //   xcol.y, ycol.y, zcol.y,
+	    //   0, 0, 1
+      // };
 
-      basis = {
-	1, 0, 0,
-	0, 1, 0,
-	0, 0, 1
-      };
+      // basis = {
+      // 	1, 0, 0,
+      // 	0, 1, 0,
+      // 	0, 0, 1
+      // };
 
-      //basis = animation_basis;
+      // //basis = animation_basis;
 
-      //std::cout << "Basis\n";
-      //printMat3(basis);
+      // //std::cout << "Basis\n";
+      // //printMat3(basis);
 
     } else {
       model.xw = (float) levelInfo->player_pos_original.x;
       model.yw = (float) levelInfo->player_pos_original.y;
+
+      mat3 model3 = mat3 {
+        model.xx, model.xy, model.xw,
+        model.yx, model.yy, model.yw,
+        model.wx, model.wy, model.ww
+      };
+
+      model3 = model3 * animation_basis;
+
+      model.xx = model3.xx;
+      model.xy = model3.xy;
+      model.xw = model3.xz;
+
+      model.yx = model3.yx;
+      model.yy = model3.yy;
+      model.yw = model3.yz;
+
+      model.wx = model3.zx;
+      model.wy = model3.zy;
+      model.ww = model3.zz;
+
+
+
+
       basis = animation_basis;
     }
     
@@ -1782,9 +1850,18 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       basis = animation_basis;
     }
     
-    *renderMemory = renderObject {PLAYER, model, viewResult.view, basis};
-    renderMemory++; 
+    // *renderMemory = renderObject {PLAYER, model, viewResult.view, basis};
+    // renderMemory++; 
   }
+
+
+
+
+  //Front Grid
+  *renderMemory = renderObject{FRONT_GRID, identity4, viewResult.view};
+  renderMemory++;
+
+
 
 
 
@@ -2133,26 +2210,43 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       
     float thickness = 0.05f;
 
-    float mirror_vertices[12];
+    // float mirror_vertices[20];
     
-    mirror_vertices[0] = x1 + thickness_offset_dir.x * thickness;
-    mirror_vertices[1] = y1 + thickness_offset_dir.y * thickness;
-    mirror_vertices[2] = 0;
-      
-    mirror_vertices[3] = x1 - thickness_offset_dir.x * thickness;
-    mirror_vertices[4] = y1 - thickness_offset_dir.y * thickness;
-    mirror_vertices[5] = 0;    
-      
-    mirror_vertices[6] = x2 - thickness_offset_dir.x * thickness;
-    mirror_vertices[7] = y2 - thickness_offset_dir.y * thickness;
-    mirror_vertices[8] = 0;    
+    state->mirror_vertices[0] = x1 + thickness_offset_dir.x * thickness;
+    state->mirror_vertices[1] = y1 + thickness_offset_dir.y * thickness;
+    
+    state->mirror_vertices[2] = mirror_vertices[2];
+    state->mirror_vertices[3] = mirror_vertices[3];
+    state->mirror_vertices[4] = mirror_vertices[4];
 
-    mirror_vertices[9] = x2 + thickness_offset_dir.x * thickness;
-    mirror_vertices[10] = y2 + thickness_offset_dir.y * thickness;
-    mirror_vertices[11] = 0;
+    state->mirror_vertices[5] = x1 - thickness_offset_dir.x * thickness;
+    state->mirror_vertices[6] = y1 - thickness_offset_dir.y * thickness;
+
+    state->mirror_vertices[7] = mirror_vertices[7];
+    state->mirror_vertices[8] = mirror_vertices[8];
+    state->mirror_vertices[9] = mirror_vertices[9];
+
+    // state->mirror_vertices[7] = 0;    
+
+    state->mirror_vertices[10] = x2 - thickness_offset_dir.x * thickness;
+    state->mirror_vertices[11] = y2 - thickness_offset_dir.y * thickness;
+    // state->mirror_vertices[12] = 0;    
+
+    state->mirror_vertices[12] = mirror_vertices[12];
+    state->mirror_vertices[13] = mirror_vertices[13];
+    state->mirror_vertices[14] = mirror_vertices[14];
 
 
-    memoryInfo->updateRenderContextVertices(MIRROR, mirror_vertices, 12);
+    state->mirror_vertices[15] = x2 + thickness_offset_dir.x * thickness;
+    state->mirror_vertices[16] = y2 + thickness_offset_dir.y * thickness;
+    // state->mirror_vertices[17] = 0;
+
+    state->mirror_vertices[17] = mirror_vertices[17];
+    state->mirror_vertices[18] = mirror_vertices[18];
+    state->mirror_vertices[19] = mirror_vertices[19];
+
+
+    memoryInfo->updateRenderContextVertices(MIRROR, state->mirror_vertices, 20);
     *renderMemory = renderObject{MIRROR, identity4, viewResult.view};
     renderMemory->alpha = mirrorAlpha;
     renderMemory++;
@@ -2161,79 +2255,43 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
 
-  //Front Grid
-  *renderMemory = renderObject{FRONT_GRID, identity4, viewResult.view};
-  renderMemory++;
-
 
   //Game-specific log values
   if(memoryInfo->debugTextActive) {
     char text[256];
+
+
+
     
     ivec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
-    sprintf_s(text, "Mirror anchor:  board(%i,%i)   hex(%i, %i)",
-	      state->mirrorFragmentAnchor.x, state->mirrorFragmentAnchor.y,
-	      hexAnchor.x, hexAnchor.y);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.95f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
 
-    sprintf_s(text, "Current player pos (in linear space): (%i,%i)",
-	      state->pos.x, state->pos.y);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.85f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
-
+    DebugOverlay debugOverlay = DebugOverlay();
     
-    sprintf_s(text, "Player flipped: %i", isTriangleFlipped(state->pos));
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.80f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
+
+    debugOverlay.display(&renderMemory, "Mirror anchor:  board(%i,%i)   hex(%i, %i)", state->mirrorFragmentAnchor.x, state->mirrorFragmentAnchor.y, hexAnchor.x, hexAnchor.y);
+
+    debugOverlay.display(&renderMemory, "Current player pos (in linear space): (%i,%i)", state->pos.x, state->pos.y);
     
-    sprintf_s(text, "Mouse coords: (%f, %f)", mouse_coords.x, mouse_coords.y);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.75f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
-
+    debugOverlay.display(&renderMemory, "Player flipped: %i", isTriangleFlipped(state->pos));
     
-    sprintf_s(text, "Player dir: %i", state->dir);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.70f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
-    
-    sprintf_s(text, "Player corner 1: (%i, %i)", state->corner1.x, state->corner1.y);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.65f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
+    debugOverlay.display(&renderMemory, "Mouse coords: (%f, %f)", mouse_coords.x, mouse_coords.y);
 
-    sprintf_s(text, "Player corner 2: (%i, %i)", state->corner2.x, state->corner2.y);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.60f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
+    debugOverlay.display(&renderMemory, "Player corner 1: (%i, %i)", state->corner1.x, state->corner1.y);
 
-    
-    ivec2 mirrorPos = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
+    debugOverlay.display(&renderMemory, "Player corner 2: (%i, %i)", state->corner2.x, state->corner2.y);
 
+    // debugOverlay.display(&renderMemory, "Mirror buffer data:  (nonsense num %i)", -1);
+    // for(int i=0; i<20; i++) {
+    //   debugDisplay(&debugDisplayDrawHeight, &renderMemory, "     Float %i: %f", i, state->mirror_vertices[i]);
+    // }
 
-    /**
-    int playerDiagRaw = 2*state->pos.x - state->pos.y;
-    int playerDiagOffset = (int)floor( ceil((float)playerDiagRaw/2.f) / 2.f);
-    int playerDiag = playerDiagRaw - playerDiagOffset;
+    // debugDisplay(&debugDisplayDrawHeight, &renderMemory, "Constant mirror buffer data:  (nonsense num %i)", -1);
+    // for(int i=0; i<20; i++) {
+    //   int j = i;
+    //   debugDisplay(&debugDisplayDrawHeight, &renderMemory, "     Float %i: %f", j, mirror_vertices[j]);
+    // }
    
-    int mirrorDiag = 2 * mirrorPos.x - mirrorPos.y;
-
-    sprintf_s(text, "Player diag: %i    Mirror diag: %i",
-	      playerDiag, mirrorDiag);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.80f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
-
-    sprintf_s(text, "Player diag offset: %i", playerDiagOffset);
-    *renderMemory = renderObject{TEXT, identity4.translated(0.5f, 0.75f, 0.f),
-      identity4,identity3f,0,0.f, text};
-    renderMemory++;
-
-    **/
+    ivec2 mirrorPos = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
     
   }
   
@@ -2245,6 +2303,5 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //std::cout << "Mirror state: " << state->mirrorState << "\n";
   //std::cout << "Current time: " << input.currentTime << "\n";
   //std::cout << "Weight: "<< state->weight << "\n";
-
 
 }
