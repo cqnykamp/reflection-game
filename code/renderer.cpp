@@ -1,9 +1,12 @@
 #if !defined(RENDERER_CPP)
+#define RENDERER_CPP
 
 #include "SDL/SDL.h"
 
 #include <fstream>
 #include <sstream>
+
+#include <map>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -19,22 +22,6 @@ struct Renderer {
 
   mat4 projectionInverse;
 
-  Renderer(int width, int height) {
-
-    screenWidth = width;
-    screenHeight = height;
-
-    projectionInverse = mat4 {
-      (float)screenWidth / 2.f, 0.f,                     0.f, (float)screenWidth/2.f,
-      0.f,                      (float)screenHeight/2.f, 0.f, (float)screenHeight/2.f,
-      0.f,                      0.f,                     1.f, 0.f,
-      0.f,                      0.f,                     0.f, 1.f
-    };
-
-  }
-
-
-
   int activeRenderTypes = 0;
   //TODO: make sure MAX_RENDER_TYPES is big enough for RenderContext enum
   #define MAX_RENDER_TYPES 10
@@ -44,6 +31,23 @@ struct Renderer {
   unsigned int shader[MAX_RENDER_TYPES];
   unsigned int indicesCount[MAX_RENDER_TYPES];
   Texture textures[MAX_RENDER_TYPES];
+
+
+  unsigned int spriteVao;
+  unsigned int spriteVbo;
+  unsigned int spriteEbo;
+  unsigned int spriteShader;
+
+
+  struct cmp_str {
+    bool operator()(char const *a, char const *b) const {
+      return std::strcmp(a, b) < 0;
+    }
+  };
+
+  std::map<char *, Texture, cmp_str> texturesTemp;
+
+
 
   unsigned int fontShader;
   unsigned int fontVao;
@@ -58,23 +62,37 @@ struct Renderer {
 
   Character characters[128];
 
+  /**
   #define MAX_LOG_TEXT 4096
   char logText[MAX_LOG_TEXT];
   int usedChars = 0;
+  */
 
-  int frameDurationLabel;
-  int innerFrameDurationLabel;
-  uint32 lastLabelTimestamp = 0;
 
+
+  Renderer(int width, int height) {
+
+    screenWidth = width;
+    screenHeight = height;
+
+    projectionInverse = mat4 {
+      (float)screenWidth / 2.f, 0.f,                     0.f, (float)screenWidth/2.f,
+      0.f,                      (float)screenHeight/2.f, 0.f, (float)screenHeight/2.f,
+      0.f,                      0.f,                     1.f, 0.f,
+      0.f,                      0.f,                     0.f, 1.f
+    };
+  }
+
+  
 
   //unused
-  void log(const char *message) {
-    for(unsigned int i=0; i < strlen(message); i++ ) {
+  // void log(const char *message) {
+  //   for(unsigned int i=0; i < strlen(message); i++ ) {
       
-      logText[usedChars] = *(message + i);
-      usedChars++;
-    }
-  }
+  //     logText[usedChars] = *(message + i);
+  //     usedChars++;
+  //   }
+  // }
 
 
 
@@ -166,6 +184,14 @@ struct Renderer {
 
   CREATE_NEW_RENDER_OBJECT(createNewRenderObject) {
 
+    textures[context] = Texture();
+
+    char fullTexturePath[100] = "textures/";
+    strcat_s(fullTexturePath, textureName);
+    textures[context].initWithImage(fullTexturePath, outputWithTransparency);
+
+    shader[context] = loadShaderFromFile(filePath);
+
     //TODO: this doesn't work bc active types aren't neccessarily sequential in the list; just clear all of them instead?
     activeRenderTypes++;
 
@@ -173,7 +199,7 @@ struct Renderer {
     unsigned int thisVao;
     unsigned int thisVbo;
     unsigned int thisEbo;
-  // 
+
     glGenVertexArrays(1, &(thisVao));
     glGenBuffers(1, &(thisVbo));
     glGenBuffers(1, &(thisEbo));
@@ -191,18 +217,12 @@ struct Renderer {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float),(void*) (3*sizeof(float)) );
       glEnableVertexAttribArray(1);
 
-
-    textures[context] = Texture();
-
-    char fullTexturePath[100] = "textures/";
-    strcat_s(fullTexturePath, textureName);
-    textures[context].initWithImage(fullTexturePath, outputWithTransparency);
-
     vao[context] = thisVao;
     vbo[context] = thisVbo;
     ebo[context] = thisEbo;
-    shader[context] = loadShaderFromFile(filePath);
     indicesCount[context] = indicesLength;
+
+
 
   }
 
@@ -261,6 +281,7 @@ struct Renderer {
 
   }
 
+  /**
   DEBUG_LOG(debugLog) {
     //SDL_memset(logText, 0, sizeof(char) * MAX_LOG_TEXT);
     for(int i=0; i<MAX_LOG_TEXT-usedChars; i++) {
@@ -272,9 +293,10 @@ struct Renderer {
       }
     }
   }
+  **/
 
 
-  int initFonts() {
+  int init() { // and other things
       //Fonts
     FT_Library ft;
     if(FT_Init_FreeType(&ft)) {
@@ -351,6 +373,52 @@ struct Renderer {
     glUniformMatrix4fv(glGetUniformLocation(fontShader, "projection"), 1, GL_FALSE, &projection.xx);
 
 
+
+    //Init sprite vbo/vao/ebo
+
+    int spriteVerticesLength = 20;
+    float spriteVertices[] = {
+      //positions           //texture coords
+      -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,
+      -0.5f,  0.5f, 0.0f,   0.0f, 1.0f,
+       0.5f,  0.5f, 0.0f,   1.0f, 1.0f,
+       0.5f, -0.5f, 0.0f,   1.0f, 0.0f
+    };
+
+    int spriteIndicesLength = 6;
+    unsigned int spriteIndices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+
+
+    glGenVertexArrays(1, &(spriteVao));
+    glGenBuffers(1, &(spriteVbo));
+    glGenBuffers(1, &(spriteEbo));
+
+    glBindVertexArray(spriteVao);
+    glBindBuffer(GL_ARRAY_BUFFER, spriteVbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteEbo);
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * spriteVerticesLength, spriteVertices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * spriteIndicesLength, spriteIndices, GL_STATIC_DRAW);
+    
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float),(void*) 0);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float),(void*) (3*sizeof(float)) );
+    glEnableVertexAttribArray(1);
+    
+    // texture = new Texture();
+    // char fullTexturePath[100] = "textures/";
+    // strcat_s(fullTexturePath, textureName);
+    // textures[context].initWithImage(fullTexturePath, outputWithTransparency);
+
+    spriteShader = loadShaderFromFile("shaders/entity.shader");
+
+
+
+
     return 0; //aka loaded successfully
   }
 
@@ -360,8 +428,8 @@ struct Renderer {
 
     RenderMemoryInfo renderMemoryInfo = *renderMemoryInfoPointer;
 
-    SDL_memset(logText, 0, sizeof(char) * MAX_LOG_TEXT);
-    usedChars = 0;
+    // SDL_memset(logText, 0, sizeof(char) * MAX_LOG_TEXT);
+    // usedChars = 0;
 
     glViewport(0, 0, screenWidth, screenHeight);
     glClearColor(1.f, 0.f, 1.f, 1.f);
@@ -374,45 +442,93 @@ struct Renderer {
 
       if(obj.renderContext) { //aka if game has put something here
 
-
         if(obj.renderContext == TEXT) {
-
-    mat4 pos = projectionInverse * obj.view * obj.model;
-
-    renderText(obj.text,
-    pos.xw, pos.yw, 0.3f, vec3{1.f, 1.f, 1.f});
+          mat4 pos = projectionInverse * obj.view * obj.model;
+          renderText(obj.text,
+          pos.xw, pos.yw, 0.3f, vec3{1.f, 1.f, 1.f});
 
         } else {
         
+          if(obj.renderContext == FLOOR_TILE) {
 
-    textures[obj.renderContext].bind();
+            Sprite sprite = obj.sprite;
+            if(!sprite.rendererHasInitMe) {
+              //init for now
+              sprite.rendererId = FLOOR_TILE;
+              sprite.rendererHasInitMe = true;
+                
+            }
 
-    glBindVertexArray(vao[obj.renderContext]);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[obj.renderContext]);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[obj.renderContext]);
-    glUseProgram(shader[obj.renderContext]);
+            if(texturesTemp.count(sprite.textureName) == 0) {
+              //in case the texture of a sprite changes in the middle, I guess?
+              char fullTexturePath[100] = "textures/";
+              strcat_s(fullTexturePath, sprite.textureName);
+              Texture thisSpriteText = Texture();
+              thisSpriteText.initWithImage(fullTexturePath, false);
 
-    mat4 modelMatData = transpose(obj.model);
-    glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "model"),
-          1, GL_FALSE, &modelMatData.xx);	      
-    mat4 viewMatData = transpose(obj.view);
-    glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "view"),
-          1, GL_FALSE, &viewMatData.xx);
-    mat3 basisMatData = transpose(obj.basis);
-    glUniformMatrix3fv(glGetUniformLocation(shader[obj.renderContext], "basis"),
-          1, GL_FALSE, &basisMatData.xx);
+              texturesTemp.insert(std::pair<char*, Texture>(sprite.textureName, thisSpriteText));
+            }
 
-    glUniform1i(glGetUniformLocation(shader[obj.renderContext],
-            "highlight_key"), obj.highlight_key);
-    glUniform1f(glGetUniformLocation(shader[obj.renderContext],
-            "alpha"), obj.alpha);
-      
-    glDrawElements(GL_TRIANGLES, indicesCount[obj.renderContext], GL_UNSIGNED_INT, 0);
+            texturesTemp.at(sprite.textureName).bind();
+          
+            glBindVertexArray(spriteVao);
+            glBindBuffer(GL_ARRAY_BUFFER, spriteVbo);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteEbo);
+            glUseProgram(spriteShader);
+
+            mat4 modelMatData = transpose(obj.model);
+            glUniformMatrix4fv(glGetUniformLocation(spriteShader, "model"),
+                  1, GL_FALSE, &modelMatData.xx);
+            mat4 viewMatData = transpose(obj.view);
+            glUniformMatrix4fv(glGetUniformLocation(spriteShader, "view"),
+                  1, GL_FALSE, &viewMatData.xx);
+            mat3 basisMatData = transpose(obj.basis);
+            glUniformMatrix3fv(glGetUniformLocation(spriteShader, "basis"),
+                  1, GL_FALSE, &basisMatData.xx);
+
+            glUniform1i(glGetUniformLocation(spriteShader,
+                    "highlight_key"), obj.highlight_key);
+            glUniform1f(glGetUniformLocation(spriteShader,
+                    "alpha"), obj.alpha);
+              
+            glDrawElements(GL_TRIANGLES, indicesCount[obj.renderContext], GL_UNSIGNED_INT, 0);
+
+
+          } else {
+            textures[obj.renderContext].bind();
+
+            glBindVertexArray(vao[obj.renderContext]);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo[obj.renderContext]);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[obj.renderContext]);
+            glUseProgram(shader[obj.renderContext]);
+
+            mat4 modelMatData = transpose(obj.model);
+            glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "model"),
+                  1, GL_FALSE, &modelMatData.xx);
+            mat4 viewMatData = transpose(obj.view);
+            glUniformMatrix4fv(glGetUniformLocation(shader[obj.renderContext], "view"),
+                  1, GL_FALSE, &viewMatData.xx);
+            mat3 basisMatData = transpose(obj.basis);
+            glUniformMatrix3fv(glGetUniformLocation(shader[obj.renderContext], "basis"),
+                  1, GL_FALSE, &basisMatData.xx);
+
+            glUniform1i(glGetUniformLocation(shader[obj.renderContext],
+                    "highlight_key"), obj.highlight_key);
+            glUniform1f(glGetUniformLocation(shader[obj.renderContext],
+                    "alpha"), obj.alpha);
+              
+            glDrawElements(GL_TRIANGLES, indicesCount[obj.renderContext], GL_UNSIGNED_INT, 0);
+
+
+          }
+
         }
 
       }
       
     }
+
+    
   
     //Deactivated renderer-level log text for now
     /*
@@ -424,14 +540,6 @@ struct Renderer {
         innerFrameDurationLabel = (int)innerDeltaTime;
         lastLabelTimestamp = currentTime;
       }
-
-      char fpsCounter[256];
-      sprintf_s(fpsCounter, "Frame dur (ms): %i", frameDurationLabel);
-      renderText(fpsCounter, 10.f, screenHeight - 20.f, 0.25f, vec3{1.f, 1.f, 1.f});
-
-      char label[256];
-      sprintf_s(label, "Inner dur (ms): %i",innerFrameDurationLabel);
-      renderText(label, 10.f, screenHeight - 35.f, 0.25f, vec3{1.f, 1.f, 1.f});
     
       char frameCounter[256];
       sprintf_s(frameCounter, "Counter: %i ", counter);
@@ -444,10 +552,7 @@ struct Renderer {
       char playbackText[256];
       sprintf_s(playbackText, "Is playing back: %i ", loopedCodeData.isPlayingBack);
       renderText(playbackText, 10.f, screenHeight - 100.f, 0.3f, vec3{1.f, 1.f, 1.f});
-
-      //log("print this ");
-      //log("and print this\n");
-
+      
       renderText(logText, 10.f, screenHeight - 120.f, 0.4f, vec3{1.f, 1.f, 1.f});
 
     }

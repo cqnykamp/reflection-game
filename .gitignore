@@ -8,3 +8,6 @@ data/textures/
 *.pdb
 *.exe
 *.manifest
+
+#The looped data extension we defined
+*.ri

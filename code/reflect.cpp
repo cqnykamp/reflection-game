@@ -1,6 +1,6 @@
 
 /**
-KNOWN BUGS:
+BUGS:
 - square mode: player does not move to correct location: bug in order of transformations
 TODO:
 - find alternative to memoryInfo->debugLog()
@@ -11,6 +11,7 @@ TODO:
 #include "gameutil.cpp"
 
 #include "DebugOverlay.cpp"
+#include "sprite.cpp"
 
 #include <iostream>
 #include <fstream>
@@ -27,6 +28,7 @@ TODO:
 
 #define SLEEP_DURATION 600 // milliseconds
 
+struct Sprite testSprite;
 
 const float mirror_vertices[] = {
   0.0f, 0.0f, 0.0f,     0.0f, 0.0f,
@@ -1235,6 +1237,9 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
 
 
 void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMode, LevelState *state) {
+
+    testSprite = Sprite(3,2,"wall.jpg");
+
     float background_vertices[] = {
       //positions             //texture coords
       -50.0f, -50.0f, 0.0f,   0.0f,   0.0f,
@@ -1466,14 +1471,14 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   // mouseHistory->hist[30] = mouse_coords;
 
   // Animation basis
-  if(state->sleep_active && input.currentTime >= state->sleepStartTime + SLEEP_DURATION) {
+  if(state->sleep_active && frameInfo.currentTime >= state->sleepStartTime + SLEEP_DURATION) {
     state->sleep_active = false;
 
     if(memoryInfo->hexMode) {
       //reflectAlongHexMode(state, state->mirrorFragmentAnchor, state->hexMirrorAngleId);
       state->pos = findNewPlayerPos(state, state->pos);
       state->is_animation_active = false;
-      onPlayerMovementFinished(memoryInfo, levelInfo, state, input.currentTime);	
+      onPlayerMovementFinished(memoryInfo, levelInfo, state, frameInfo.currentTime);	
 
       
     } else {
@@ -1482,7 +1487,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
   }
 
-  state->mirrorTimeElapsed += input.deltaTime;
+  state->mirrorTimeElapsed += frameInfo.deltaTime;
 
   
   mat3 animation_basis;
@@ -1495,11 +1500,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
     
   if(state->is_animation_active) {
-    state->weight += 0.0025f * input.deltaTime;
+    state->weight += 0.0025f * frameInfo.deltaTime;
 
     if(state->weight >= 1) {
       state->is_animation_active = false;
-      onPlayerMovementFinished(memoryInfo, levelInfo, state, input.currentTime);	
+      onPlayerMovementFinished(memoryInfo, levelInfo, state, frameInfo.currentTime);	
     } else {
       //Lerp basis
 
@@ -1606,8 +1611,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       model.yw += sqrt(0.75f) - 1; //align edge of triangle with anchors
       
       if(isTriangleFlipped(hexCoords)) {
-	model.yw += 1.f/3.f * sqrt(0.75f);
-	model.yy *= -1;
+    	  model.yw += 1.f/3.f * sqrt(0.75f);
+	      model.yy *= -1;
       }
 
       //model.xx *= 0.95f;
@@ -1621,7 +1626,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     }
 
 
-    *renderMemory = renderObject {FLOOR_TILE, model, viewResult.view};
+    *renderMemory = renderObject {FLOOR_TILE, model, viewResult.view, identity3f, 0, 0, "",  testSprite};
     if(levelInfo->tiles[i].type == 2) {
       renderMemory->highlight_key = 1;
     } else {
@@ -2103,7 +2108,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 	  state->pos = findNewPlayerPos(state, state->pos);
 	  state->is_animation_active = false;
-	  onPlayerMovementFinished(memoryInfo, levelInfo, state, input.currentTime); 
+	  onPlayerMovementFinished(memoryInfo, levelInfo, state, frameInfo.currentTime); 
 
 
 	  
@@ -2266,7 +2271,9 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     ivec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);
 
     DebugOverlay debugOverlay = DebugOverlay();
-    
+
+    debugOverlay.display(&renderMemory, "Outer frame duration (ms): %i", (int) frameInfo.deltaTime);
+    debugOverlay.display(&renderMemory, "Inner frame duration (ms): %i", (int) frameInfo.innerDeltaTime);
 
     debugOverlay.display(&renderMemory, "Mirror anchor:  board(%i,%i)   hex(%i, %i)", state->mirrorFragmentAnchor.x, state->mirrorFragmentAnchor.y, hexAnchor.x, hexAnchor.y);
 

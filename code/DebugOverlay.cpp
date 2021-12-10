@@ -4,10 +4,10 @@
 
 struct DebugOverlay {
 
-  float height = 1;
+  float height = 0.95f;
 
   void reset() {
-    height = 1;
+    height = 0.95f;
   }
 
   void display(renderObject** renderMemory, char* message, ...) {

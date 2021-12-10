@@ -4,6 +4,7 @@
 // and filter out asserts
 
 #include "gameutil.cpp"
+#include "sprite.cpp"
 
 #define PI 3.1415926535897932384626433f
 
@@ -93,8 +94,6 @@ struct controllerInput {
 struct gameInput {
   int screenHeight;
   int screenWidth;
-  uint32 currentTime;
-  uint32 deltaTime;
   controllerInput controllers[4];
 };
 
@@ -107,6 +106,7 @@ struct renderObject {
   int highlight_key;
   float alpha;
   std::string text;
+  Sprite sprite;
 };
 
 
@@ -115,7 +115,7 @@ struct gameMemory {
   bool isDllFirstFrame;
   bool hexMode;
   bool debugTextActive;
-  
+
   int permanentStorageSize;
   int temporaryStorageSize;
   void *permanentStorage;
@@ -135,7 +135,15 @@ struct RenderMemoryInfo {
 };
 
 
-#define GAME_UPDATE_AND_RENDER(name) void name(gameInput input, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo)
+//Should never be recorded by looped data
+struct FrameInfo {
+  uint32 currentTime;
+  uint32 deltaTime;
+  uint32 innerDeltaTime;
+};
+
+
+#define GAME_UPDATE_AND_RENDER(name) void name(gameInput input, FrameInfo frameInfo, gameMemory *memoryInfo, RenderMemoryInfo *renderMemoryInfo)
 
 typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
 

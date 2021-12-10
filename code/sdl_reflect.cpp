@@ -1,4 +1,4 @@
-//TODO: figure out why startup is laggy aka >17ms per frame
+//TODO: figure out why startup is laggy aka >17ms per frame 
 //TODO: better logging system?
 
 //#define SDL_MAIN_HANDLED
@@ -27,6 +27,14 @@ int screenWidth = 1919; //1920; //1280;
 int screenHeight = 1079; //1080; //720;
 
 Renderer renderer = Renderer(screenWidth, screenHeight);
+
+
+
+
+
+int frameDurationLabel;
+int innerFrameDurationLabel;
+uint32 lastLabelTimestamp = 0;
 
 
 struct GameCode {
@@ -200,14 +208,12 @@ LOAD_LEVEL_FROM_FILE(loadLevelFromFile) {
 
 
 void win32BeginRecordingInput(LoopedCodeData *loopedCodeData) {
-  char *filename = "foo.ri";
+  char *filename = "looped_data.ri";
   loopedCodeData->recordingFileHandle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
 
   DWORD bytesWritten;
   WriteFile(loopedCodeData->recordingFileHandle, loopedCodeData->gameMemoryBlock,
 	    loopedCodeData->gameMemoryBlockSize, &bytesWritten, 0);
-
-
 }
 
 void win32EndRecordingInput(LoopedCodeData *loopedCodeData) {
@@ -215,7 +221,7 @@ void win32EndRecordingInput(LoopedCodeData *loopedCodeData) {
 }
 
 void win32BeginInputPlayback(LoopedCodeData *loopedCodeData) {
-  char *filename = "foo.ri";
+  char *filename = "looped_data.ri";
   loopedCodeData->playbackFileHandle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
 
   DWORD bytesRead;
@@ -329,16 +335,6 @@ int CALLBACK  WinMain(
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
-	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
-	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
-
-	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-
 	SDL_AudioSpec want;
 	SDL_AudioSpec have;
 	SDL_AudioDeviceID device;
@@ -420,7 +416,7 @@ int CALLBACK  WinMain(
 	int16 *stream = (int16 *)malloc(audioStreamMaxSize);
 
 	
-  if(renderer.initFonts() != 0) {
+  if(renderer.init() != 0) {
     return -1; //quit
   }
 	
@@ -447,29 +443,35 @@ int CALLBACK  WinMain(
 
 	  uint64 innerFrameStart = SDL_GetPerformanceCounter();
 
+
+    // ========= DLL loading and unloading =============
+
 	  FILETIME newDllWriteTime = getLastWriteTime(sourceGameCodeDLLFullPath);
 	  if(CompareFileTime(&newDllWriteTime, &prevFrameDllWriteTime) == 0) {
 
 	    if(CompareFileTime(&newDllWriteTime, &gameCode.dllLastWriteTime) != 0) {
-	      //gameCode.dllLastWriteTime = newDllWriteTime;
-
 	      memory.isDllFirstFrame = true;
 	      unloadGameCode(&gameCode);
 	      gameCode = loadGameCode(sourceGameCodeDLLFullPath,
 				      tempGameCodeDLLFullPath);
-	      //counter = 30;
-
 	    }
 	  }
 
 	  prevFrameDllWriteTime = newDllWriteTime;
 
-	  
-	  SDL_memset(renderMemoryInfo.memory, 0, sizeof(renderObject) * renderMemoryInfo.count);
+
+    //Reset Temporary Storage memory
 	  SDL_memset(memory.temporaryStorage, 0, memory.temporaryStorageSize);
 
+    //Reset Render Output memory
+	  SDL_memset(renderMemoryInfo.memory, 0, sizeof(renderObject) * renderMemoryInfo.count);
+
+
+
+    // ============ Read Keyboard/Mouse Input ===========
+
+
 	  controllerInput mainController = {};
-	  //mainController = {};
 
 	  SDL_Event event;
 	  while(SDL_PollEvent(&event)) {
@@ -478,98 +480,92 @@ int CALLBACK  WinMain(
 	      running = false;
 	    } break;
 
-	    case SDL_MOUSEMOTION:
-	      {
-	      } break;
+	    case SDL_MOUSEMOTION: {
+	    } break;
 
 	    case SDL_MOUSEBUTTONDOWN:
-	    case SDL_MOUSEBUTTONUP:
-	      {
-		switch(event.button.button) {
-		case SDL_BUTTON_LEFT:
-		  {
-		    mainController.mouseLeft.transitionCount += 1;
-		    mainController.mouseLeft.endedDown = (event.type == SDL_MOUSEBUTTONDOWN);
-		  } break;
-		case SDL_BUTTON_RIGHT:
-		  {
-
-		  } break;
-		}
-	      } break;	      
-	    
-	    case SDL_KEYDOWN:
-	    case SDL_KEYUP:
-	      {
-
-		SDL_Scancode scancode = event.key.keysym.scancode;
-		
-		if(event.type == SDL_KEYDOWN && scancode==SDL_SCANCODE_ESCAPE) {
-		  running = false;
-		}
-		if(event.type == SDL_KEYDOWN && scancode==SDL_SCANCODE_L) {
-		  if(!loopedCodeData.isRecording && !loopedCodeData.isPlayingBack) {
-		    //start recording
-		    loopedCodeData.isRecording = true;
-		    win32BeginRecordingInput(&loopedCodeData);
-		    
-		  } else if(loopedCodeData.isRecording) {
-		    //stop recording, start playback		    
-		    loopedCodeData.isRecording = false;
-		    loopedCodeData.isPlayingBack = true;
-
-		    win32EndRecordingInput(&loopedCodeData);
-
-		    win32BeginInputPlayback(&loopedCodeData);
+	    case SDL_MOUSEBUTTONUP: {
 
 
-		  } else if(loopedCodeData.isPlayingBack) {
-		    loopedCodeData.isPlayingBack = false;
-		    win32EndInputPlayback(&loopedCodeData);
-		    
-		  }
-		}
-		if(scancode==SDL_SCANCODE_R) {
-		  mainController.rKey.transitionCount += 1;
-		  mainController.rKey.endedDown = (event.type==SDL_KEYUP);
-		}
+        switch(event.button.button) {
+        case SDL_BUTTON_LEFT: {
+          mainController.mouseLeft.transitionCount += 1;
+          mainController.mouseLeft.endedDown = (event.type == SDL_MOUSEBUTTONDOWN);
+        } break;
 
-		if(scancode==SDL_SCANCODE_LEFT) {
-		  mainController.leftArrow.transitionCount += 1;
-		  mainController.leftArrow.endedDown = (event.type==SDL_KEYUP);
-		}
-		if(scancode==SDL_SCANCODE_RIGHT) {
-		  mainController.rightArrow.transitionCount += 1;
-		  mainController.rightArrow.endedDown = (event.type==SDL_KEYUP);
-		}
+        case SDL_BUTTON_RIGHT: { } break;
+        }
 
-		if(event.type==SDL_KEYDOWN && scancode==SDL_SCANCODE_D) {
-		  memory.debugTextActive = !memory.debugTextActive;
-		}
+      } break;	      
+          
+      case SDL_KEYDOWN:
+      case SDL_KEYUP: {
 
-		if(event.type==SDL_KEYDOWN &&
-		   (scancode==SDL_SCANCODE_Q || scancode==SDL_SCANCODE_H)) {
+        SDL_Scancode scancode = event.key.keysym.scancode;
+        
+        if(event.type == SDL_KEYDOWN && scancode==SDL_SCANCODE_ESCAPE) {
+          running = false;
+        }
+        if(event.type == SDL_KEYDOWN && scancode==SDL_SCANCODE_L) {
+          if(!loopedCodeData.isRecording && !loopedCodeData.isPlayingBack) {
+            //start recording
+            loopedCodeData.isRecording = true;
+            win32BeginRecordingInput(&loopedCodeData);
+            
+          } else if(loopedCodeData.isRecording) {
+            //stop recording, start playback		    
+            loopedCodeData.isRecording = false;
+            loopedCodeData.isPlayingBack = true;
 
-		  #ifdef REFLECT_INTERNAL
-
-		  memory.isDllFirstFrame = true;
-		  if(scancode==SDL_SCANCODE_H) {
-		    memory.hexMode = !memory.hexMode;
-		  }
-		  unloadGameCode(&gameCode);
-		  gameCode = loadGameCode(sourceGameCodeDLLFullPath, tempGameCodeDLLFullPath);
-		  
-		  #endif
+            win32EndRecordingInput(&loopedCodeData);
+            win32BeginInputPlayback(&loopedCodeData);
 
 
-		}
+          } else if(loopedCodeData.isPlayingBack) {
+            loopedCodeData.isPlayingBack = false;
+            win32EndInputPlayback(&loopedCodeData);
+            
+          }
+        }
+        if(scancode==SDL_SCANCODE_R) {
+          mainController.rKey.transitionCount += 1;
+          mainController.rKey.endedDown = (event.type==SDL_KEYUP);
+        }
 
+        if(scancode==SDL_SCANCODE_LEFT) {
+          mainController.leftArrow.transitionCount += 1;
+          mainController.leftArrow.endedDown = (event.type==SDL_KEYUP);
+        }
+        if(scancode==SDL_SCANCODE_RIGHT) {
+          mainController.rightArrow.transitionCount += 1;
+          mainController.rightArrow.endedDown = (event.type==SDL_KEYUP);
+        }
 
-	      } break;
-	      
-	    
-	    }
+        if(event.type==SDL_KEYDOWN && scancode==SDL_SCANCODE_D) {
+          memory.debugTextActive = !memory.debugTextActive;
+        }
+
+        if(event.type==SDL_KEYDOWN &&
+          (scancode==SDL_SCANCODE_Q || scancode==SDL_SCANCODE_H)) {
+
+          #ifdef REFLECT_INTERNAL
+
+          memory.isDllFirstFrame = true;
+          if(scancode==SDL_SCANCODE_H) {
+            memory.hexMode = !memory.hexMode;
+          }
+          unloadGameCode(&gameCode);
+          gameCode = loadGameCode(sourceGameCodeDLLFullPath, tempGameCodeDLLFullPath);
+          
+          #endif
+        }
+
+	    } break;
+      }
+
 	  }
+
+
 	  int32 mouseX;
 	  int32 mouseY;
 	  SDL_GetMouseState(&mouseX, &mouseY);
@@ -578,6 +574,12 @@ int CALLBACK  WinMain(
 	  mainController.mouseY = mouseY;
 	  //std::cout << "Mouse x " << mainController.mouseX << "\n";
 	  //std::cout << "Mouse y " << mainController.mouseY << "\n";
+
+
+
+
+
+    // ================ Audio ===============
 
 	  int bytesLeftInQueue = SDL_GetQueuedAudioSize(device);
 	  int samplesLeftInQueue = bytesLeftInQueue / 2;
@@ -591,18 +593,33 @@ int CALLBACK  WinMain(
 	    samplesToAppend = audioStreamMaxSize;
 	  }
 	  
+
+
+    // ====== Capture input data ==========
+
 	  gameInput input;
 	  input.screenWidth = screenWidth;
 	  input.screenHeight = screenHeight;
 	  input.controllers[0] = mainController;
+
+
+
+    FrameInfo frameInfo;
 	  
 	  uint64 timerCount = SDL_GetPerformanceCounter();
-	  uint64 deltaCount = timerCount - prevTime;	  
+	  uint64 deltaCount = timerCount - prevTime;
 	  uint32 deltaTime = (uint32) (1000.f * (float)deltaCount / (float)timerFrequency);
 	  uint32 currentTime = (uint32) (1000.f * (float) timerCount / (float)timerFrequency); 
-	  input.currentTime = currentTime;
-	  input.deltaTime = deltaTime;
+    
+    frameInfo.currentTime = currentTime;
+	  frameInfo.deltaTime = deltaTime;
+
+    uint32 innerDeltaTime = (uint32) (1000.f*(float)innerFrameTime / (float)timerFrequency);
+    frameInfo.innerDeltaTime = innerDeltaTime;
+
 	  prevTime = timerCount;
+
+
 	  //std::cout << "Duraton: "<<deltaTime<< " ms\n";
 
 	  
@@ -612,9 +629,12 @@ int CALLBACK  WinMain(
 	  if(loopedCodeData.isPlayingBack) {
 	    win32PlaybackInput(&loopedCodeData, &input);
 	  }
+
+
+	  // ====== GAME UPDATE STATE ==========
+	  gameCode.gameUpdateAndRender(input, frameInfo, &memory, &renderMemoryInfo);
 	  
-	  gameCode.gameUpdateAndRender(input, &memory, &renderMemoryInfo);
-	  
+
 
 	  assert(samplesToAppend <= audioStreamMaxSize);
 	  SDL_memset(stream, 0, audioStreamMaxSize);
@@ -626,8 +646,17 @@ int CALLBACK  WinMain(
 	  }
 	  SDL_QueueAudio(device, (void *)stream, samplesToAppend * sizeof(int16));
 
+
+    //Render frame
     renderer.renderFrame(&renderMemoryInfo, memory);
 
+    /*
+    if(currentTime > lastLabelTimestamp + 500) {
+      frameDurationLabel = (int)deltaTime;
+      innerFrameDurationLabel = (int)innerDeltaTime;
+      lastLabelTimestamp = currentTime;
+    }
+    */
 	    
 	  uint64 innerFrameEnd = SDL_GetPerformanceCounter();
 	  innerFrameTime = innerFrameEnd - innerFrameStart;
