@@ -1,4 +1,4 @@
-#ifndef TEXTURE_H
+#if !defined(TEXTURE_H)
 #define TEXTURE_H
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -40,13 +40,11 @@ public:
       std::string imageExt = image_path.substr(image_path.length()-3,3);
       // std::cout << "Image file extension as std::string: " << imageExt << "\n";
 
-      if(outputWithTransparency) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-      } else if(imageExt == "png") {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-      } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-      }
+      GLenum inputFormat = (imageExt == "png") ? GL_RGBA : GL_RGB;
+      GLint outputFormat = (outputWithTransparency) ? GL_RGBA : GL_RGB;
+
+      glTexImage2D(GL_TEXTURE_2D, 0, outputFormat, width, height, 0, inputFormat, GL_UNSIGNED_BYTE, data);
+          
       glGenerateMipmap(GL_TEXTURE_2D);
 
     } else {
@@ -56,6 +54,8 @@ public:
 
     stbi_image_free(data);
 
+
+
   }
 
   void bind() {
@@ -63,6 +63,7 @@ public:
   }
 
   
+
 };
 
 

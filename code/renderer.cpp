@@ -30,7 +30,21 @@ struct Renderer {
   unsigned int ebo[MAX_RENDER_TYPES];
   unsigned int shader[MAX_RENDER_TYPES];
   unsigned int indicesCount[MAX_RENDER_TYPES];
-  Texture textures[MAX_RENDER_TYPES];
+  Texture texturesOld[MAX_RENDER_TYPES];
+
+
+  #define TEXTURE_FILES 7
+  Texture textures[TEXTURE_FILES];
+  char* textureNames[TEXTURE_FILES] = {
+    "awesomeface.png",
+    "container.jpg",
+    "flat_triangle.png",
+    "square_overlay.png",
+    "triangle_overlay.png",
+    "wall.jpg",
+    "water.jpg"
+  };
+
 
 
   unsigned int spriteVao;
@@ -44,9 +58,6 @@ struct Renderer {
       return std::strcmp(a, b) < 0;
     }
   };
-
-  std::map<char *, Texture, cmp_str> texturesTemp;
-
 
 
   unsigned int fontShader;
@@ -184,11 +195,12 @@ struct Renderer {
 
   CREATE_NEW_RENDER_OBJECT(createNewRenderObject) {
 
-    textures[context] = Texture();
-
     char fullTexturePath[100] = "textures/";
     strcat_s(fullTexturePath, textureName);
-    textures[context].initWithImage(fullTexturePath, outputWithTransparency);
+
+    texturesOld[context] = Texture();
+    texturesOld[context].initWithImage(fullTexturePath, outputWithTransparency);
+
 
     shader[context] = loadShaderFromFile(filePath);
 
@@ -409,14 +421,17 @@ struct Renderer {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float),(void*) (3*sizeof(float)) );
     glEnableVertexAttribArray(1);
     
-    // texture = new Texture();
-    // char fullTexturePath[100] = "textures/";
-    // strcat_s(fullTexturePath, textureName);
-    // textures[context].initWithImage(fullTexturePath, outputWithTransparency);
-
     spriteShader = loadShaderFromFile("shaders/entity.shader");
 
 
+    for(int i=0; i<TEXTURE_FILES; i++) {
+
+      char fullTexturePath[100] = "textures/";
+      strcat_s(fullTexturePath, textureNames[i]);
+
+      textures[i] = Texture();
+      textures[i].initWithImage(fullTexturePath, true);
+    }
 
 
     return 0; //aka loaded successfully
@@ -449,34 +464,29 @@ struct Renderer {
 
         } else {
         
-          if(obj.renderContext == FLOOR_TILE) {
+          if(obj.renderContext == FLOOR_TILE || obj.renderContext == MIRROR) {
 
             Sprite sprite = obj.sprite;
-            if(!sprite.rendererHasInitMe) {
-              //init for now
-              sprite.rendererId = FLOOR_TILE;
-              sprite.rendererHasInitMe = true;
-                
+
+            int textureId = -1;
+            for(int j=0; j<TEXTURE_FILES; j++) {
+              if(strcmp(sprite.textureName, textureNames[j]) == 0) {
+                textureId = j;
+                break;
+              }
             }
 
-            if(texturesTemp.count(sprite.textureName) == 0) {
-              //in case the texture of a sprite changes in the middle, I guess?
-              char fullTexturePath[100] = "textures/";
-              strcat_s(fullTexturePath, sprite.textureName);
-              Texture thisSpriteText = Texture();
-              thisSpriteText.initWithImage(fullTexturePath, false);
+            //If this fails, the texture has not been loaded in this file
+            assert(textureId != -1);
 
-              texturesTemp.insert(std::pair<char*, Texture>(sprite.textureName, thisSpriteText));
-            }
-
-            texturesTemp.at(sprite.textureName).bind();
-          
+            textures[textureId].bind();
+             
             glBindVertexArray(spriteVao);
             glBindBuffer(GL_ARRAY_BUFFER, spriteVbo);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteEbo);
             glUseProgram(spriteShader);
 
-            mat4 modelMatData = transpose(obj.model);
+            mat4 modelMatData = transpose(sprite.getModelMatrix());
             glUniformMatrix4fv(glGetUniformLocation(spriteShader, "model"),
                   1, GL_FALSE, &modelMatData.xx);
             mat4 viewMatData = transpose(obj.view);
@@ -486,16 +496,16 @@ struct Renderer {
             glUniformMatrix3fv(glGetUniformLocation(spriteShader, "basis"),
                   1, GL_FALSE, &basisMatData.xx);
 
-            glUniform1i(glGetUniformLocation(spriteShader,
-                    "highlight_key"), obj.highlight_key);
-            glUniform1f(glGetUniformLocation(spriteShader,
-                    "alpha"), obj.alpha);
+            // glUniform1i(glGetUniformLocation(spriteShader,
+            //         "highlight_key"), obj.highlight_key);
+            // glUniform1f(glGetUniformLocation(spriteShader,
+            //         "alpha"), obj.alpha);
               
-            glDrawElements(GL_TRIANGLES, indicesCount[obj.renderContext], GL_UNSIGNED_INT, 0);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 
           } else {
-            textures[obj.renderContext].bind();
+            texturesOld[obj.renderContext].bind();
 
             glBindVertexArray(vao[obj.renderContext]);
             glBindBuffer(GL_ARRAY_BUFFER, vbo[obj.renderContext]);

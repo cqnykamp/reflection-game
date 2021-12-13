@@ -1,4 +1,5 @@
 #if !defined(GAMEUTIL_CPP)
+#define GAMEUTIL_CPP
 
 
 #include <cmath>
@@ -74,6 +75,18 @@ struct vec3 {
   float x=0;
   float y=0;
   float z=0;
+
+  vec3(float _x, float _y, float _z) {
+    x = _x;
+    y = _y;
+    z = _z;
+  }
+
+  vec3(vec2 v2, float f) {
+    x = v2.x;
+    y = v2.y;
+    z = f;
+  }
 };
 
 struct ivec3 {
@@ -369,5 +382,4 @@ mat4 rotate(mat4 m, float theta) {
 
 
 
-#define GAMEUTIL_CPP
 #endif

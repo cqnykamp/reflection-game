@@ -1,3 +1,6 @@
+#if !defined(DEBUG_OVERLAY_CPP)
+#define DEBUG_OVERLAY_CPP
+
 #include <cstdarg>
 
 #include "reflect.h"
@@ -31,3 +34,5 @@ struct DebugOverlay {
   }
 
 };
+
+#endif

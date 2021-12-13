@@ -1,4 +1,6 @@
 #if !defined(REFLECT_H)
+#define REFLECT_H
+
 
 //TODO: define internal and external run mode
 // and filter out asserts
@@ -153,5 +155,4 @@ GAME_UPDATE_AND_RENDER(gameUpdateAndRenderStub) {
 
 
 
-#define REFLECT_H
 #endif

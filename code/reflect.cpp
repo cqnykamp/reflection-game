@@ -29,6 +29,8 @@ TODO:
 #define SLEEP_DURATION 600 // milliseconds
 
 struct Sprite testSprite;
+struct Sprite playerSprite;
+struct Sprite mirrorSprite;
 
 const float mirror_vertices[] = {
   0.0f, 0.0f, 0.0f,     0.0f, 0.0f,
@@ -1238,8 +1240,6 @@ void onPlayerMovementFinished(gameMemory *memoryInfo, LevelInfo *levelInfo, Leve
 
 void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMode, LevelState *state) {
 
-    testSprite = Sprite(3,2,"wall.jpg");
-
     float background_vertices[] = {
       //positions             //texture coords
       -50.0f, -50.0f, 0.0f,   0.0f,   0.0f,
@@ -1254,6 +1254,8 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
     createNewRenderObject(background_vertices, 20, background_indices, 6, "shaders/entity.shader", BACKGROUND, "water.jpg", false);
     
     if(hexMode) {
+
+      testSprite = Sprite(vec2(1.0f), vec2(0.0f), "flat_triangle.png");
       
       float floor_vertices[] = {
       	-0.5f, -1.f/3.f * sqrt(0.75f), 0.f, 0.0f, 0.0f, //left
@@ -1267,6 +1269,9 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
       	  "shaders/entity.shader", FLOOR_TILE, "container.jpg", false);
       
     } else {
+
+      testSprite = Sprite(vec2(1.0f), vec2(0.5f), "wall.jpg");
+
       float floor_vertices[] = {
         //Vertex coords     //Tex Coords
 	      0.0f, 0.0f, 0.0f,   0.0f, 0.0f,
@@ -1297,6 +1302,8 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
 	0, 1, 2
       };
 
+      playerSprite = Sprite(vec2(0.8f), vec2(0.5f), "awesomeface.png");
+
       createNewRenderObject(player_vertices, 15, player_indices, 3,
 			    "shaders/entity.shader", PLAYER, "wall.jpg", false);
 
@@ -1312,6 +1319,9 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
 	0, 1, 2,
 	2, 3, 0
       };
+
+      playerSprite = Sprite(vec2(1.0f), vec2(0.5f), "awesomeface.png");
+
       createNewRenderObject(player_vertices, 20, player_indices, 6,
 			    "shaders/entity.shader", PLAYER, "container.jpg", false);
 
@@ -1340,6 +1350,8 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
       2, 3, 0
     };
     createNewRenderObject(state->mirror_vertices, 20, mirror_indices, 6, "shaders/entity.shader", MIRROR, "container.jpg", false);
+
+    mirrorSprite = Sprite(vec2(1.0f, 0.1f), vec2(0.0f), "awesomeface.png");
 
     if(hexMode) {
 
@@ -1590,7 +1602,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //Background
   *renderMemory = renderObject {BACKGROUND, identity4, viewResult.view};
   renderMemory++;
-  
+
 
   // std::cout << " ## Rendering floor tiles ##\n";
 
@@ -1601,27 +1613,25 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     Tile tile = levelInfo->tiles[i];
     ivec2 hexCoords;
 
+    testSprite.resetTransform();
+
+    // testSprite.rotation = 0.01f * ((float)frameInfo.currentTime);
+
     if(memoryInfo->hexMode) {
 
       hexCoords = ivec2{tile.xid + 1, 2*tile.yid + 1};
       
-      model.xw = 0.5f * (float)hexCoords.x;
-      model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
-      
-      model.yw += sqrt(0.75f) - 1; //align edge of triangle with anchors
-      
+      testSprite.position.x = 0.5f * (float)hexCoords.x;
+      testSprite.position.y = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
+            
+      testSprite.scale.y *= sqrt(0.75f);
       if(isTriangleFlipped(hexCoords)) {
-    	  model.yw += 1.f/3.f * sqrt(0.75f);
-	      model.yy *= -1;
+	      testSprite.scale.y *= -1;
       }
-
-      //model.xx *= 0.95f;
-      //model.yy *= 0.95f;
             
     } else {
 
-      model.xw = (float) levelInfo->tiles[i].xid;
-      model.yw = (float) levelInfo->tiles[i].yid;
+      testSprite.position = vec2((float)levelInfo->tiles[i].xid, (float)levelInfo->tiles[i].yid);
 
     }
 
@@ -1660,16 +1670,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     ivec2 boardPos = levelInfo->player_pos_original;
     ivec2 hexCoords;
 
+    playerSprite.resetTransform();
+
     if(memoryInfo->hexMode) {
       
       hexCoords = state->pos;
-      
-      model.xx *= 0.80f;
-      model.yy *= 0.80f;
-      if(isTriangleFlipped(hexCoords)) {
-	model.yy *= -1;
-      }
 
+      if(isTriangleFlipped(hexCoords)) {
+        playerSprite.scale.y *= -1;
+      }
 
       //Corner orientation
       
@@ -1678,24 +1687,24 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       mat2 R = identity2f;
 
       if(c2.x < c1.x) {
-	model.xx *= -1;
+      	model.xx *= -1;
 
-	if(c1.y == c2.y) {
-	  //do nothing
-	} else if(c1.y > c2.y) {
-	  R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
-	} else {
-	  R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
-	}
+        if(c1.y == c2.y) {
+          //do nothing
+        } else if(c1.y > c2.y) {
+          R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
+        } else {
+          R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
+        }
 		
       } else {
-	if(c1.y == c2.y) {
-	  //do nothing
-	} else if(c1.y > c2.y) {
-	  R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
-	} else {
-	  R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
-	}
+        if(c1.y == c2.y) {
+          //do nothing
+        } else if(c1.y > c2.y) {
+          R = createReflectionMatrixThroughLine( -1.f / (2.f * sqrt(0.75f)) );
+        } else {
+          R = createReflectionMatrixThroughLine( 1.f / (2.f * sqrt(0.75f)) );
+        }
 
       }
       mat4 r = identity4;
@@ -1719,9 +1728,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       if(isTriangleFlipped(hexCoords)) {
 	      model.yw += 1.f/3.f * sqrt(0.75f);
       }
-
-
-      
       
       assert(animation_basis.zx == 0);
       assert(animation_basis.zy == 0);
@@ -2074,22 +2080,23 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       //If so, set mirror to MIRROR_DRAGGABLE
 
       if(isNearbyAnchor(levelInfo, mouse_coords, MOUSE_HOVER_SNAP_DIST, memoryInfo->hexMode)) {
-	state->mirrorState = MIRROR_DRAGGABLE;
+      	state->mirrorState = MIRROR_DRAGGABLE;
 
-	state->mirrorFragmentAnchor = nearestAnchor(levelInfo, mouse_coords, memoryInfo->hexMode);
-	state->mirrorFragmentAngle = RIGHT;
-	state->mirrorFragmentMag = 0;
+        state->mirrorFragmentAnchor = nearestAnchor(levelInfo, mouse_coords, memoryInfo->hexMode);
+        state->mirrorFragmentAngle = RIGHT;
+        state->mirrorFragmentMag = 0;
 
-	/**printf("Nearest anchor is (%f, %f) to mouse coords (%f, %f)\n",
-	       mirrorFragmentAnchor.x,
-	       mirrorFragmentAnchor.y,
-	       mouse_coords.x,
-	       mouse_coords.y
-	       );**/
+        /**printf("Nearest anchor is (%f, %f) to mouse coords (%f, %f)\n",
+               mirrorFragmentAnchor.x,
+              mirrorFragmentAnchor.y,
+              mouse_coords.x,
+              mouse_coords.y
+              );**/
       }
     }
-    
-       
+          
+
+
   } else if(controller.mouseLeft.transitionCount && !controller.mouseLeft.endedDown) {
     //
     // Left Mouse Button Released
@@ -2099,27 +2106,24 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       
       if(passesThroughAnchor) {
 	
-	state->mirrorState = MIRROR_LOCKED;
-	state->mirrorTimeElapsed = 0.f;
+        state->mirrorState = MIRROR_LOCKED;
+        state->mirrorTimeElapsed = 0.f;
 
-	if(memoryInfo->hexMode) {  
-	  //reflectAlongHexMode(state, state->mirrorFragmentAnchor,
-	  //			      state->hexMirrorAngleId);
+        if(memoryInfo->hexMode) {  
+          //reflectAlongHexMode(state, state->mirrorFragmentAnchor,
+          //			      state->hexMirrorAngleId);
 
-	  state->pos = findNewPlayerPos(state, state->pos);
-	  state->is_animation_active = false;
-	  onPlayerMovementFinished(memoryInfo, levelInfo, state, frameInfo.currentTime); 
+          state->pos = findNewPlayerPos(state, state->pos);
+          state->is_animation_active = false;
+          onPlayerMovementFinished(memoryInfo, levelInfo, state, frameInfo.currentTime); 
 
-
-	  
-	  
-	} else {
-	  reflect_along(state, state->mirrorFragmentAnchor,
-			state->mirrorFragmentAngle);
-	}
-       
+        } else {
+          reflect_along(state, state->mirrorFragmentAnchor,
+            state->mirrorFragmentAngle);
+        }
+            
       } else {
-	state->mirrorState = MIRROR_INACTIVE;
+      	state->mirrorState = MIRROR_INACTIVE;
       }
       
     }
@@ -2135,7 +2139,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       mirrorAlpha = 1.0f - pow(state->mirrorTimeElapsed, 1.2f) / 1000.f;
       /**
       if(mirrorAlpha <= 0.3f) {
-	mirrorAlpha = 0.3f;
+      	mirrorAlpha = 0.3f;
       }
       **/
     } else {
@@ -2154,7 +2158,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     
     vec2 diff;
     if(memoryInfo->hexMode) {
-
 
       float theta = (float)state->hexMirrorAngleId * PI/6.f;
       theta = fmod(theta + 4*PI, PI);
@@ -2192,13 +2195,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
       ivec2 hexAnchorCoords = 2 * state->mirrorFragmentAnchor;
       if(hexAnchorCoords.y % 4 == 2) {
-	hexAnchorCoords.x += 1;
+	      hexAnchorCoords.x += 1;
       }
 
       vec2 hexAnchor = (vec2) hexAnchorCoords;
       hexAnchor.x *= 0.5f;
       hexAnchor.y *= 0.5f * sqrt(0.75f);
-
 
       x1 = hexAnchor.x - mirrorExtension.x;
       y1 = hexAnchor.y - mirrorExtension.y;
@@ -2212,47 +2214,18 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     x2 = x1 + diff.x + 1.5f * mirrorExtension.x;
     y2 = y1 + diff.y + 1.5f * mirrorExtension.y;
     //std::printf("Mirror segment: (%f, %f) to (%f, %f) Thickness dir: (%f, %f)\n", x1, y1, x2, y2, thickness_offset_dir.x, thickness_offset_dir.y);
-      
-    float thickness = 0.05f;
 
-    // float mirror_vertices[20];
-    
-    state->mirror_vertices[0] = x1 + thickness_offset_dir.x * thickness;
-    state->mirror_vertices[1] = y1 + thickness_offset_dir.y * thickness;
-    
-    state->mirror_vertices[2] = mirror_vertices[2];
-    state->mirror_vertices[3] = mirror_vertices[3];
-    state->mirror_vertices[4] = mirror_vertices[4];
+    vec2 centerPoint = 0.5f * (vec2(x1,y1) + vec2(x2,y2));
+    float theta = atan2(y2-y1, x2-x1);
+    float halfHypotenuse = 0.5f * sqrt( (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) );
 
-    state->mirror_vertices[5] = x1 - thickness_offset_dir.x * thickness;
-    state->mirror_vertices[6] = y1 - thickness_offset_dir.y * thickness;
+    mirrorSprite.resetTransform();
 
-    state->mirror_vertices[7] = mirror_vertices[7];
-    state->mirror_vertices[8] = mirror_vertices[8];
-    state->mirror_vertices[9] = mirror_vertices[9];
+    mirrorSprite.position = centerPoint;
+    mirrorSprite.scale.x = 2.0f * halfHypotenuse;
+    mirrorSprite.rotation = theta;
 
-    // state->mirror_vertices[7] = 0;    
-
-    state->mirror_vertices[10] = x2 - thickness_offset_dir.x * thickness;
-    state->mirror_vertices[11] = y2 - thickness_offset_dir.y * thickness;
-    // state->mirror_vertices[12] = 0;    
-
-    state->mirror_vertices[12] = mirror_vertices[12];
-    state->mirror_vertices[13] = mirror_vertices[13];
-    state->mirror_vertices[14] = mirror_vertices[14];
-
-
-    state->mirror_vertices[15] = x2 + thickness_offset_dir.x * thickness;
-    state->mirror_vertices[16] = y2 + thickness_offset_dir.y * thickness;
-    // state->mirror_vertices[17] = 0;
-
-    state->mirror_vertices[17] = mirror_vertices[17];
-    state->mirror_vertices[18] = mirror_vertices[18];
-    state->mirror_vertices[19] = mirror_vertices[19];
-
-
-    memoryInfo->updateRenderContextVertices(MIRROR, state->mirror_vertices, 20);
-    *renderMemory = renderObject{MIRROR, identity4, viewResult.view};
+    *renderMemory = renderObject{MIRROR, identity4, viewResult.view, identity3f, 0, 0, "", mirrorSprite};
     renderMemory->alpha = mirrorAlpha;
     renderMemory++;
     

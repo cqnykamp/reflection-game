@@ -10,4 +10,4 @@ data/textures/
 *.manifest
 
 #The looped data extension we defined
-*.ri
+*.ri 
