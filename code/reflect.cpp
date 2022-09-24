@@ -1255,7 +1255,7 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
     
     if(hexMode) {
 
-      testSprite = Sprite(vec2(1.0f), vec2(0.0f), "flat_triangle.png");
+      testSprite = Sprite(vec2(1.0f, sqrt(0.75f)), vec2(0.5f, 0.5f), "flat_triangle.png");
       
       float floor_vertices[] = {
       	-0.5f, -1.f/3.f * sqrt(0.75f), 0.f, 0.0f, 0.0f, //left
@@ -1270,7 +1270,7 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
       
     } else {
 
-      testSprite = Sprite(vec2(1.0f), vec2(0.5f), "wall.jpg");
+      testSprite = Sprite(vec2(1.0f), vec2(0.0f), "wall.jpg");
 
       float floor_vertices[] = {
         //Vertex coords     //Tex Coords
@@ -1299,10 +1299,11 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
       };
     
       unsigned int player_indices[] = {
-	0, 1, 2
+	      0, 1, 2
       };
 
-      playerSprite = Sprite(vec2(0.8f), vec2(0.5f), "awesomeface.png");
+      playerSprite = Sprite(vec2(1.0, sqrt(0.75f)), vec2(0.5f, 1.0f/3.0f), "player_triangle.png");
+      playerSprite.useBasisVectors = true;
 
       createNewRenderObject(player_vertices, 15, player_indices, 3,
 			    "shaders/entity.shader", PLAYER, "wall.jpg", false);
@@ -1316,11 +1317,12 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
       	0.15f, 0.85f, 0.0f, 0.0f, 1.0f
       };
       unsigned int player_indices[] = {
-	0, 1, 2,
-	2, 3, 0
+        0, 1, 2,
+        2, 3, 0
       };
 
-      playerSprite = Sprite(vec2(1.0f), vec2(0.5f), "awesomeface.png");
+      playerSprite = Sprite(vec2(1.0f, 1.0f), vec2(0.0f), "awesomeface.png");
+      playerSprite.useBasisVectors = true;
 
       createNewRenderObject(player_vertices, 20, player_indices, 6,
 			    "shaders/entity.shader", PLAYER, "container.jpg", false);
@@ -1351,7 +1353,7 @@ void loadRenderObjects(CreateNewRenderObject *createNewRenderObject, bool hexMod
     };
     createNewRenderObject(state->mirror_vertices, 20, mirror_indices, 6, "shaders/entity.shader", MIRROR, "container.jpg", false);
 
-    mirrorSprite = Sprite(vec2(1.0f, 0.1f), vec2(0.0f), "awesomeface.png");
+    mirrorSprite = Sprite(vec2(1.0f, 0.1f), vec2(0.5f), "mirror.png");
 
     if(hexMode) {
 
@@ -1624,7 +1626,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       testSprite.position.x = 0.5f * (float)hexCoords.x;
       testSprite.position.y = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
             
-      testSprite.scale.y *= sqrt(0.75f);
+      // testSprite.scale.y *= sqrt(0.75f);
       if(isTriangleFlipped(hexCoords)) {
 	      testSprite.scale.y *= -1;
       }
@@ -1670,16 +1672,24 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     ivec2 boardPos = levelInfo->player_pos_original;
     ivec2 hexCoords;
 
-    playerSprite.resetTransform();
+    playerSprite.resetTransform();  
+    playerSprite.useBasisVectors = true;
 
     if(memoryInfo->hexMode) {
-      
-      hexCoords = state->pos;
 
+      hexCoords = state->pos;
+      
+      // playerSprite.position.x = 0.5f * (float)hexCoords.x - 0.5f;
+      // playerSprite.position.y = 0.5f * sqrt(0.75f) * (float)hexCoords.y - 0.5f;
+
+      playerSprite.position = 0.5f * vec2(hexCoords);
+            
       if(isTriangleFlipped(hexCoords)) {
-        playerSprite.scale.y *= -1;
+	      playerSprite.scale.y *= -1;
       }
 
+      // playerSprite.rotation = 0.0005f * (float) frameInfo.currentTime;
+  
       //Corner orientation
       
       ivec2 c1 = state->corner1;
@@ -1687,7 +1697,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       mat2 R = identity2f;
 
       if(c2.x < c1.x) {
-      	model.xx *= -1;
+      	// model.xx *= -1;
+        playerSprite.scale.x *= -1;
 
         if(c1.y == c2.y) {
           //do nothing
@@ -1707,6 +1718,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
         }
 
       }
+  
       mat4 r = identity4;
       r.xx = R.xx;
       r.xy = R.xy;
@@ -1715,19 +1727,18 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	  
       model = r * model;
 
-
+      // playerSprite.xbasis = vec2(R.xx, R.xy);
+      // playerSprite.ybasis = vec2(R.yx, R.yy);
 
       //Shift to correct board position
 	
-      model.xw = 0.5f * (float)hexCoords.x;
-      model.yw = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
+      // playerSprite.position.x = 0.5f * (float)hexCoords.x;
+      // playerSprite.position.y = 0.5f * sqrt(0.75f) * (float)hexCoords.y;
+      // playerSprite.position.y += sqrt(0.75f) - 1; //align edge of triangle with anchors
 
-      model.yw += sqrt(0.75f) - 1; //align edge of triangle with anchors
-
-
-      if(isTriangleFlipped(hexCoords)) {
-	      model.yw += 1.f/3.f * sqrt(0.75f);
-      }
+      // if(isTriangleFlipped(hexCoords)) {
+	    //   playerSprite.position.y += 1.f/3.f * sqrt(0.75f);
+      // }
       
       assert(animation_basis.zx == 0);
       assert(animation_basis.zy == 0);
@@ -1760,8 +1771,9 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
       // //printMat3(basis);
 
     } else {
-      model.xw = (float) levelInfo->player_pos_original.x;
-      model.yw = (float) levelInfo->player_pos_original.y;
+      playerSprite.position.x = (float) levelInfo->player_pos_original.x;
+      playerSprite.position.y = (float) levelInfo->player_pos_original.y;
+
 
       mat3 model3 = mat3 {
         model.xx, model.xy, model.xw,
@@ -1788,8 +1800,14 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
       basis = animation_basis;
     }
+
+
+
+    // playerSprite.xbasis = vec2(model.xx, model.yx);
+    // playerSprite.ybasis = vec2(model.xy, model.yy);
+    // playerSprite.position = vec2(model.xw, model.yw);
     
-    *renderMemory = renderObject {PLAYER, model, viewResult.view, basis};
+    *renderMemory = renderObject {PLAYER, model, viewResult.view, basis, 0, 0, "", playerSprite};
     renderMemory++;
 
 
@@ -1869,8 +1887,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 
 
   //Front Grid
-  *renderMemory = renderObject{FRONT_GRID, identity4, viewResult.view};
-  renderMemory++;
+  // *renderMemory = renderObject{FRONT_GRID, identity4, viewResult.view};
+  // renderMemory++;
 
 
 
@@ -1991,10 +2009,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
 	      //leftBound,rightBound,bottomBound,topBound,p.x,p.y);
 
 	      if( (mirrorId==3 || (p.x > leftBound && p.x < rightBound)) &&
-		  (mirrorId==0 || (p.y > bottomBound && p.y < topBound)) ) {
+		      (mirrorId==0 || (p.y > bottomBound && p.y < topBound)) ) {
 		 
-		passesThroughLine = true;		
-		passesThroughAnchor = true;
+          passesThroughLine = true;		
+          passesThroughAnchor = true;
 	      }
 	      
 	    }
@@ -2237,8 +2255,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
   //Game-specific log values
   if(memoryInfo->debugTextActive) {
     char text[256];
-
-
 
     
     ivec2 hexAnchor = hexBoardToLinearSpace(state->mirrorFragmentAnchor);

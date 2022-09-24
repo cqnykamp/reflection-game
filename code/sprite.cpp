@@ -15,6 +15,10 @@ struct Sprite {
     vec2 position;
     float rotation;
 
+    bool useBasisVectors = false;
+    vec2 xbasis;
+    vec2 ybasis;
+
     char *textureName;
 
     //unused right now. activated by renderer
@@ -37,6 +41,9 @@ struct Sprite {
     }
 
     void resetTransform() {
+        xbasis = vec2(1.0f, 0.0f);
+        ybasis = vec2(0.0f, 1.0f);
+
         position = vec2(0.f);
         scale = defaultScale;
         offset = defaultOffset;
@@ -47,7 +54,7 @@ struct Sprite {
     mat4 getModelMatrix() {
 
         mat4 model = identity4;
-        model = model.translated(vec3(offset, 0.0f));
+        model = model.translated(vec3(-1.0f * offset, 0.0f));
         mat4 scaleMatrix = {
             scale.x, 0.0f, 0.0f, 0.0f,
             0.f, scale.y, 0.0f, 0.0f,
@@ -61,6 +68,18 @@ struct Sprite {
             0.0f, 0.0f, 0.0f, 1.0f
         };
         model = rotationMatrix * scaleMatrix * model;
+
+        if(useBasisVectors) {
+            model = model.translated(vec3(offset, 0.0f));
+            mat4 transformMatrix = {
+                xbasis.x, ybasis.x, 0.0f, 0.0f,
+                xbasis.y, ybasis.y, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+            };
+            model = transformMatrix * model;
+        }
+
         model = model.translated(vec3(position, 0.0f));
 
         return model;

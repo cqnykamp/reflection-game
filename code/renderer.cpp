@@ -33,12 +33,14 @@ struct Renderer {
   Texture texturesOld[MAX_RENDER_TYPES];
 
 
-  #define TEXTURE_FILES 7
+  #define TEXTURE_FILES 9
   Texture textures[TEXTURE_FILES];
   char* textureNames[TEXTURE_FILES] = {
     "awesomeface.png",
     "container.jpg",
     "flat_triangle.png",
+    "mirror.png",
+    "player_triangle.png",
     "square_overlay.png",
     "triangle_overlay.png",
     "wall.jpg",
@@ -186,12 +188,12 @@ struct Renderer {
   };
 
 
-  UPDATE_RENDER_CONTEXT_VERTICES(updateRenderContextVertices) {
-    //TODO: don't use GL_STATIC_DRAW
-    glBindVertexArray(vao[context]);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[context]);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * verticesLength, vertices);
-  }
+  // UPDATE_RENDER_CONTEXT_VERTICES(updateRenderContextVertices) {
+  //   //TODO: don't use GL_STATIC_DRAW
+  //   glBindVertexArray(vao[context]);
+  //   glBindBuffer(GL_ARRAY_BUFFER, vbo[context]);
+  //   glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * verticesLength, vertices);
+  // }
 
   CREATE_NEW_RENDER_OBJECT(createNewRenderObject) {
 
@@ -391,10 +393,10 @@ struct Renderer {
     int spriteVerticesLength = 20;
     float spriteVertices[] = {
       //positions           //texture coords
-      -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,
-      -0.5f,  0.5f, 0.0f,   0.0f, 1.0f,
-       0.5f,  0.5f, 0.0f,   1.0f, 1.0f,
-       0.5f, -0.5f, 0.0f,   1.0f, 0.0f
+      0.0f, 0.0f, 0.0f,   0.0f, 0.0f,
+      0.0f, 1.0f, 0.0f,   0.0f, 1.0f,
+      1.0f, 1.0f, 0.0f,   1.0f, 1.0f,
+      1.0f, 0.0f, 0.0f,   1.0f, 0.0f
     };
 
     int spriteIndicesLength = 6;
@@ -464,7 +466,7 @@ struct Renderer {
 
         } else {
         
-          if(obj.renderContext == FLOOR_TILE || obj.renderContext == MIRROR) {
+          if(obj.renderContext == FLOOR_TILE || obj.renderContext == MIRROR || obj.renderContext==PLAYER) {
 
             Sprite sprite = obj.sprite;
 

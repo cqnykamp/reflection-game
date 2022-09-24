@@ -66,8 +66,8 @@ enum RenderContext {
 #define LOAD_LEVEL_FROM_FILE(name) void name(int levelNum, LoadedLevel *data)
 typedef LOAD_LEVEL_FROM_FILE(LoadLevelFromFile);
 
-#define UPDATE_RENDER_CONTEXT_VERTICES(name) void name (RenderContext context, float *vertices, int verticesLength)
-typedef UPDATE_RENDER_CONTEXT_VERTICES(UpdateRenderContextVertices);
+// #define UPDATE_RENDER_CONTEXT_VERTICES(name) void name (RenderContext context, float *vertices, int verticesLength)
+// typedef UPDATE_RENDER_CONTEXT_VERTICES(UpdateRenderContextVertices);
 
 #define DEBUG_LOG(name) void name(char text[])
 typedef DEBUG_LOG(DebugLog);
@@ -124,7 +124,7 @@ struct gameMemory {
   void *temporaryStorage;
 
   LoadLevelFromFile *loadLevelFromFile;
-  UpdateRenderContextVertices *updateRenderContextVertices;
+  // UpdateRenderContextVertices *updateRenderContextVertices;
   DebugLog *debugLog;
   CreateNewRenderObject *createNewRenderObject;
 

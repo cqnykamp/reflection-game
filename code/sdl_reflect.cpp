@@ -260,9 +260,9 @@ void win32PlaybackInput(LoopedCodeData *loopedCodeData, gameInput *newInput) {
 
 
 
-UPDATE_RENDER_CONTEXT_VERTICES(updateRenderContextVertices) {
-  renderer.updateRenderContextVertices(context, vertices, verticesLength);
-}
+// UPDATE_RENDER_CONTEXT_VERTICES(updateRenderContextVertices) {
+//   renderer.updateRenderContextVertices(context, vertices, verticesLength);
+// }
 CREATE_NEW_RENDER_OBJECT(createNewRenderObject) {
   renderer.createNewRenderObject(vertices, verticesLength, indices, indicesLength,filePath, context, textureName, outputWithTransparency);
 }
@@ -385,7 +385,7 @@ int CALLBACK  WinMain(
 
   //TODO: SHOULD NOT NEED THE FOLLOWING FUNCTION POINTERS, DO IT WITH MEMORY INSTEAD
 
-	memory.updateRenderContextVertices = updateRenderContextVertices;
+	// memory.updateRenderContextVertices = updateRenderContextVertices;
 	// memory.debugLog = debugLog;
 	memory.createNewRenderObject = createNewRenderObject;
 
@@ -468,7 +468,10 @@ int CALLBACK  WinMain(
 
 
 
-    // ============ Read Keyboard/Mouse Input ===========
+    // ============ Read Keyboard/Mouse Input ==========
+	
+	//NOTE: Keyboard input is all messed up. Ended down should be when (event.type == [KEYDOWN]).
+	// Also, SDL sends multiple events when key held down, so we need to ignore those.
 
 
 	  controllerInput mainController = {};
