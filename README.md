@@ -1,9 +1,9 @@
 # reflection-game
 _A video game about mathematical reflections in 2D space_ 
 
-Imagined, designed, and developed by Charles Nykamp in 2021.
-
 ![Gameplay footage](demo-media/reflection-gameplay-recording.gif)
+
+Imagined, designed, and developed by Charles Nykamp in 2021.
 
 ## Features
 * 12 Levels
