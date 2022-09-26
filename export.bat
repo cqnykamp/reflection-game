@@ -7,6 +7,7 @@ call "build.bat"
 popd
 
 xcopy /s /q /y data exported
-copy build\reflect.exe exported
+copy build\sdl_reflect.exe exported
+copy build\reflect.dll exported
 
 
